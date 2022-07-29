@@ -111,6 +111,8 @@ build_diff_proj() {
 
     # Refresh the modification time of the top file, otherwise some changes to the RTL source code will not take effect in next compilation.
     touch -m `find $PROJECT_PATH/$VSRC_FOLDER -name $DIFFTEST_TOP_FILE` 1>/dev/null 2>&1
+    # create soft link ($BUILD_PATH/*.sv -> $PROJECT_PATH/$VSRC_FOLDER/*.sv)
+    create_soft_link $BUILD_PATH $PROJECT_PATH/$VSRC_FOLDER \"*.sv\" 1 10
     # create soft link ($BUILD_PATH/*.v -> $PROJECT_PATH/$VSRC_FOLDER/*.v)
     create_soft_link $BUILD_PATH $PROJECT_PATH/$VSRC_FOLDER \"*.v\" 1 10
     # create soft link ($BUILD_PATH/*.v -> $PROJECT_PATH/ysyx/ram/*.v)

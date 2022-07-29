@@ -1,6 +1,7 @@
 *
 !*/
 !*.v
+!*.sv
 !*.h
 !*.c
 !*.cc
@@ -19,14 +20,13 @@
 !README
 !README.md
 !LICENSE
+!libraries/
+!libraries/*
+!submit/*
+!*.xlsx
+!myinfo.txt
 !.gitignore
 **/build/
 **/build_test/
 **/difftest
 **/out/
-!libraries/difftest
-!libraries/NEMU
-!libraries/DRAMsim3
-!submit/*
-!*.xlsx
-!myinfo.txt
