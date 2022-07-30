@@ -21,6 +21,7 @@ module core_top(
   logic [`CPU_WIDTH-1:0]  s_regs [`REG_COUNT-1:0];
   logic [`CPU_WIDTH-1:0]  s_exu_pc,  s_lsu_pc,  s_wbu_pc ;
   logic [`INS_WIDTH-1:0]  s_idu_ins, s_exu_ins, s_lsu_ins, s_wbu_ins;
+  logic                   s_idu_nop, s_exu_nop, s_lsu_nop, s_wbu_nop;
   logic                   s_wbu_cmt;
 
   // 2.1 ifu ////////////////////////////////////////////////////////
@@ -88,7 +89,8 @@ module core_top(
     .o_idu_bfun3   (idu_bfun3    ),
     .o_idu_pc      (idu_pc       ),
     .s_idu_iderr   (s_id_err     ),
-    .s_idu_ins     (s_idu_ins    )
+    .s_idu_ins     (s_idu_ins    ),
+    .s_idu_nop     (s_idu_nop    )
   );
 
   // 2.3 exu ///////////////////////////////////////////////
@@ -126,6 +128,7 @@ module core_top(
     .i_idu_ldstbp  (idu_ldstbp    ),
     .i_idu_pc      (idu_pc        ),
     .s_idu_ins     (s_idu_ins     ),
+    .s_idu_nop     (s_idu_nop     ),
     .o_exu_res     (exu_exres     ),
     .o_exu_rs2     (exu_rs2       ),
     .o_exu_lsfunc3 (exu_lsfunc3   ),
@@ -135,7 +138,8 @@ module core_top(
     .o_exu_rdid    (exu_rdid      ),
     .o_exu_rdwen   (exu_rdwen     ),
     .s_exu_pc      (s_exu_pc      ),
-    .s_exu_ins     (s_exu_ins     )
+    .s_exu_ins     (s_exu_ins     ),
+    .s_exu_nop     (s_exu_nop     )
   );
 
   // 2.4 lsu ///////////////////////////////////////////////
@@ -163,13 +167,15 @@ module core_top(
     .i_exu_sten    (exu_sten      ),
     .s_exu_pc      (s_exu_pc      ),
     .s_exu_ins     (s_exu_ins     ),
+    .s_exu_nop     (s_exu_nop     ),
     .o_lsu_lsres   (lsu_lsres     ),
     .o_lsu_exres   (lsu_exres     ),
     .o_lsu_lden    (lsu_lden      ),
     .o_lsu_rdid    (lsu_rdid      ),
     .o_lsu_rdwen   (lsu_rdwen     ),
     .s_lsu_pc      (s_lsu_pc      ),
-    .s_lsu_ins     (s_lsu_ins     )
+    .s_lsu_ins     (s_lsu_ins     ),
+    .s_lsu_nop     (s_lsu_nop     )
   );
 
   // 2.5 wbu ///////////////////////////////////////////////
@@ -190,12 +196,14 @@ module core_top(
     .i_lsu_lden   (lsu_lden     ),
     .s_lsu_pc     (s_lsu_pc     ),
     .s_lsu_ins    (s_lsu_ins    ),
+    .s_lsu_nop    (s_lsu_nop    ),
     .o_wbu_rdwen  (wbu_rdwen    ),
     .o_wbu_rd     (wbu_rd       ),
     .o_wbu_rdid   (wbu_rdid     ),
     .s_wbu_pc     (s_wbu_pc     ),
     .s_wbu_ins    (s_wbu_ins    ),
-    .s_wbu_cmt    (s_wbu_cmt    )
+    .s_wbu_cmt    (s_wbu_cmt    ),
+    .s_wbu_nop    (s_wbu_nop    )
   );
 
   // 2.6 bypass, regfile read/write. ///////////////////////
@@ -273,7 +281,7 @@ module core_top(
       cmt_wdata <= wbu_rd   ;
       cmt_pc    <= s_wbu_pc ;
       cmt_inst  <= s_wbu_ins;
-      cmt_valid <= s_wbu_cmt;
+      cmt_valid <= !s_wbu_nop & s_wbu_cmt;
 
       regs_diff <= s_regs   ;
 

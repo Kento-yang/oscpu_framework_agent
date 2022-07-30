@@ -1,27 +1,29 @@
 module wbu (
   // 1. signal to pipe shake hands:
-  input                         i_clk         ,
-  input                         i_rst_n       ,
-  input                         i_pre_valid   ,   // from pre-stage
-  output                        o_pre_ready   ,   //  to  pre-stage
+  input   logic                   i_clk         ,
+  input   logic                   i_rst_n       ,
+  input   logic                   i_pre_valid   ,   // from pre-stage
+  output  logic                   o_pre_ready   ,   //  to  pre-stage
 
   // 2. input comb signal from pre stage:
-  input   [`CPU_WIDTH-1:0]      i_lsu_exres   ,
-  input   [`CPU_WIDTH-1:0]      i_lsu_lsres   ,
-  input   [`REG_ADDRW-1:0]      i_lsu_rdid    ,
-  input                         i_lsu_rdwen   ,
-  input                         i_lsu_lden    ,
-  input   [`CPU_WIDTH-1:0]      s_lsu_pc      ,
-  input   [`INS_WIDTH-1:0]      s_lsu_ins     ,
+  input   logic [`CPU_WIDTH-1:0]  i_lsu_exres   ,
+  input   logic [`CPU_WIDTH-1:0]  i_lsu_lsres   ,
+  input   logic [`REG_ADDRW-1:0]  i_lsu_rdid    ,
+  input   logic                   i_lsu_rdwen   ,
+  input   logic                   i_lsu_lden    ,
+  input   logic [`CPU_WIDTH-1:0]  s_lsu_pc      ,
+  input   logic [`INS_WIDTH-1:0]  s_lsu_ins     ,
+  input   logic                   s_lsu_nop     ,
 
   // 3. output comb signal to post stage:
-  output                        o_wbu_rdwen   ,
-  output  [`CPU_WIDTH-1:0]      o_wbu_rd      ,
-  output  [`REG_ADDRW-1:0]      o_wbu_rdid    ,
+  output  logic                   o_wbu_rdwen   ,
+  output  logic [`CPU_WIDTH-1:0]  o_wbu_rd      ,
+  output  logic [`REG_ADDRW-1:0]  o_wbu_rdid    ,
   // 4 for sim:
-  output  [`CPU_WIDTH-1:0]      s_wbu_pc      ,
-  output  [`INS_WIDTH-1:0]      s_wbu_ins     ,
-  output                        s_wbu_cmt
+  output  logic [`CPU_WIDTH-1:0]  s_wbu_pc      ,
+  output  logic [`INS_WIDTH-1:0]  s_wbu_ins     ,
+  output  logic                   s_wbu_cmt     ,
+  output  logic                   s_wbu_nop
 );
 
   // 1. shake hands to reg pre stage signals:///////////////////////////////////////////////////////////////////
@@ -46,14 +48,14 @@ module wbu (
   logic [`INS_WIDTH-1:0]  lsu_ins_r    ;
 
   stl_reg #(
-    .WIDTH      (3*`CPU_WIDTH+`REG_ADDRW+2+`INS_WIDTH),
+    .WIDTH      (3*`CPU_WIDTH+`REG_ADDRW+2+`INS_WIDTH+1),
     .RESET_VAL  (0       )
   ) regs(
   	.i_clk      (i_clk   ),
     .i_rst_n    (i_rst_n ),
     .i_wen      (pre_sh ),
-    .i_din      ({i_lsu_exres, i_lsu_lsres, i_lsu_rdid, i_lsu_rdwen, i_lsu_lden, s_lsu_pc, s_lsu_ins} ),
-    .o_dout     ({lsu_exres_r, lsu_lsres_r, lsu_rdid_r, lsu_rdwen_r, lsu_lden_r, lsu_pc_r, lsu_ins_r} )
+    .i_din      ({i_lsu_exres, i_lsu_lsres, i_lsu_rdid, i_lsu_rdwen, i_lsu_lden, s_lsu_pc, s_lsu_ins, s_lsu_nop} ),
+    .o_dout     ({lsu_exres_r, lsu_lsres_r, lsu_rdid_r, lsu_rdwen_r, lsu_lden_r, lsu_pc_r, lsu_ins_r, s_wbu_nop} )
   );
 
   // 2. generate valid signals for post stage://////////////////////////////////////////////////////////////////

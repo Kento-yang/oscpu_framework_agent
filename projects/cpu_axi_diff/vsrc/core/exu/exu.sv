@@ -1,44 +1,46 @@
 `include "defines.sv"
 module exu (
   // 1. signal to pipe shake hands:
-  input                             i_clk         ,
-  input                             i_rst_n       ,
-  input                             i_pre_nop     ,
-  input                             i_pre_valid   ,   // from pre-stage
-  output                            o_pre_ready   ,   //  to  pre-stage
-  output                            o_post_valid  ,   //  to  post-stage
-  input                             i_post_ready  ,   // from post-stage
+  input  logic                       i_clk         ,
+  input  logic                       i_rst_n       ,
+  input  logic                       i_pre_nop     ,
+  input  logic                       i_pre_valid   ,   // from pre-stage
+  output logic                       o_pre_ready   ,   //  to  pre-stage
+  output logic                       o_post_valid  ,   //  to  post-stage
+  input  logic                       i_post_ready  ,   // from post-stage
 
   // 2. input comb signal from pre stage:
-  input     [`CPU_WIDTH-1:0]        i_idu_imm     ,
-  input     [`CPU_WIDTH-1:0]        i_idu_rs1     ,
-  input     [`CPU_WIDTH-1:0]        i_idu_rs2     ,
-  input     [`REG_ADDRW-1:0]        i_idu_rdid    ,
-  input                             i_idu_rdwen   ,
-  input     [`EXU_SEL_WIDTH-1:0]    i_idu_exsrc   ,
-  input     [`EXU_OPT_WIDTH-1:0]    i_idu_exopt   ,
-  input     [2:0]                   i_idu_lsfunc3 ,
-  input                             i_idu_lden    ,
-  input                             i_idu_sten    ,
-  input                             i_idu_ldstbp  ,
-  input     [`CPU_WIDTH-1:0]        i_idu_pc      ,
-  input     [`INS_WIDTH-1:0]        s_idu_ins     ,
+  input  logic  [`CPU_WIDTH-1:0]     i_idu_imm     ,
+  input  logic  [`CPU_WIDTH-1:0]     i_idu_rs1     ,
+  input  logic  [`CPU_WIDTH-1:0]     i_idu_rs2     ,
+  input  logic  [`REG_ADDRW-1:0]     i_idu_rdid    ,
+  input  logic                       i_idu_rdwen   ,
+  input  logic  [`EXU_SEL_WIDTH-1:0] i_idu_exsrc   ,
+  input  logic  [`EXU_OPT_WIDTH-1:0] i_idu_exopt   ,
+  input  logic  [2:0]                i_idu_lsfunc3 ,
+  input  logic                       i_idu_lden    ,
+  input  logic                       i_idu_sten    ,
+  input  logic                       i_idu_ldstbp  ,
+  input  logic  [`CPU_WIDTH-1:0]     i_idu_pc      ,
+  input  logic  [`INS_WIDTH-1:0]     s_idu_ins     ,
+  input  logic                       s_idu_nop     ,
   
   // 3. output comb signal to post stage:
   // 3.1 exu output value:
-  output    [`CPU_WIDTH-1:0]        o_exu_res     ,
+  output logic  [`CPU_WIDTH-1:0]     o_exu_res     ,
   // 3.2 for lsu:
-  output    [`CPU_WIDTH-1:0]        o_exu_rs2     ,
-  output    [2:0]                   o_exu_lsfunc3 ,
-  output                            o_exu_lden    ,
-  output                            o_exu_sten    ,
-  output                            o_exu_ldstbp  ,
+  output logic  [`CPU_WIDTH-1:0]     o_exu_rs2     ,
+  output logic  [2:0]                o_exu_lsfunc3 ,
+  output logic                       o_exu_lden    ,
+  output logic                       o_exu_sten    ,
+  output logic                       o_exu_ldstbp  ,
   // 3.3 for wbu:
-  output    [`REG_ADDRW-1:0]        o_exu_rdid    ,
-  output                            o_exu_rdwen   ,
+  output logic  [`REG_ADDRW-1:0]     o_exu_rdid    ,
+  output logic                       o_exu_rdwen   ,
   // 4 for sim:
-  output    [`CPU_WIDTH-1:0]        s_exu_pc      ,
-  output    [`INS_WIDTH-1:0]        s_exu_ins
+  output logic  [`CPU_WIDTH-1:0]     s_exu_pc      ,
+  output logic  [`INS_WIDTH-1:0]     s_exu_ins     ,
+  output logic                       s_exu_nop
 );
 
   // 1. shake hands://///////////////////////////////////////////////////////////////////////////////////////
@@ -107,14 +109,14 @@ module exu (
   assign idu_ins     = i_pre_nop ? `INS_WIDTH'b0 : s_idu_ins     ;
 
   stl_reg #(
-    .WIDTH      (4*`CPU_WIDTH+`REG_ADDRW+7+`EXU_SEL_WIDTH+`EXU_OPT_WIDTH+`INS_WIDTH),
+    .WIDTH      (4*`CPU_WIDTH+`REG_ADDRW+7+`EXU_SEL_WIDTH+`EXU_OPT_WIDTH+`INS_WIDTH+1),
     .RESET_VAL  (0       )
   ) regs(
   	.i_clk      (i_clk   ),
     .i_rst_n    (i_rst_n ),
     .i_wen      (pre_sh  ),
-    .i_din      ({idu_imm  , idu_rs1  , idu_rs2  , idu_rdid  , idu_rdwen  , idu_exsrc  , idu_exopt  , idu_lsfunc3  , idu_lden  , idu_sten  , idu_ldstbp  , idu_pc  , idu_ins  } ),
-    .o_dout     ({idu_imm_r, idu_rs1_r, idu_rs2_r, idu_rdid_r, idu_rdwen_r, idu_exsrc_r, idu_exopt_r, idu_lsfunc3_r, idu_lden_r, idu_sten_r, idu_ldstbp_r, idu_pc_r, idu_ins_r} )
+    .i_din      ({idu_imm  , idu_rs1  , idu_rs2  , idu_rdid  , idu_rdwen  , idu_exsrc  , idu_exopt  , idu_lsfunc3  , idu_lden  , idu_sten  , idu_ldstbp  , idu_pc  , idu_ins  , i_pre_nop|s_idu_nop} ),
+    .o_dout     ({idu_imm_r, idu_rs1_r, idu_rs2_r, idu_rdid_r, idu_rdwen_r, idu_exsrc_r, idu_exopt_r, idu_lsfunc3_r, idu_lden_r, idu_sten_r, idu_ldstbp_r, idu_pc_r, idu_ins_r, s_exu_nop          } )
   );
 
   // 3. use pre stage signals to generate comb logic for post stage://////////////////////////////////////////

@@ -1,17 +1,17 @@
 module idu (
   // 1. signal to pipe shake hands:
-  input                             i_clk         ,
-  input                             i_rst_n       ,
-  input                             i_pre_nop     ,
-  input                             i_pre_stall   ,
-  input                             i_pre_valid   ,   // from pre-stage
-  output                            o_pre_ready   ,   //  to  pre-stage
-  output                            o_post_valid  ,   //  to  post-stage
-  input                             i_post_ready  ,   // from post-stage
+  input  logic                      i_clk         ,
+  input  logic                      i_rst_n       ,
+  input  logic                      i_pre_nop     ,
+  input  logic                      i_pre_stall   ,
+  input  logic                      i_pre_valid   ,   // from pre-stage
+  output logic                      o_pre_ready   ,   //  to  pre-stage
+  output logic                      o_post_valid  ,   //  to  post-stage
+  input  logic                      i_post_ready  ,   // from post-stage
 
   // 2. input comb signal from pre stage:
-  input        [`INS_WIDTH-1:0]     i_ifu_ins     ,
-  input        [`CPU_WIDTH-1:0]     i_ifu_pc      ,
+  input  logic [`INS_WIDTH-1:0]     i_ifu_ins     ,
+  input  logic [`CPU_WIDTH-1:0]     i_ifu_pc      ,
 
   // 3. output comb signal to post stage:
   // 3.1 for bypass to get reg value.
@@ -37,6 +37,7 @@ module idu (
   output logic [`CPU_WIDTH-1:0]     o_idu_pc      ,
   // 4 for sim:
   output logic [`INS_WIDTH-1:0]     s_idu_ins     ,
+  output logic                      s_idu_nop     ,
   output logic [2:0]                s_idu_iderr     // bit0:opc_err, bit1:func3_err, bit2:func7_err
 );
 
@@ -57,14 +58,14 @@ module idu (
   assign ifu_ins    = i_pre_nop ? `INS_WIDTH'h13 : i_ifu_ins;  // 0x13 == ADDI x0,x0,0 == nop.
 
   stl_reg #(
-    .WIDTH      (`CPU_WIDTH+`INS_WIDTH),
+    .WIDTH      (`CPU_WIDTH+`INS_WIDTH+1),
     .RESET_VAL  (0                    )
   ) prereg (
   	.i_clk      (i_clk                ),
     .i_rst_n    (i_rst_n              ),
     .i_wen      (pre_sh               ),
-    .i_din      ({ifu_ins  , ifu_pc  }),
-    .o_dout     ({ifu_ins_r, ifu_pc_r})
+    .i_din      ({ifu_ins  , ifu_pc  , i_pre_nop}),
+    .o_dout     ({ifu_ins_r, ifu_pc_r, s_idu_nop})
   );
 
   // 2. generate valid signals for post stage://////////////////////////////////////////////////////////////////

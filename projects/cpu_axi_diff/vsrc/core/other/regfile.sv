@@ -29,7 +29,8 @@ module regfile (
   assign o_rdata2 = rf[i_raddr2];
 
   for (genvar i = 0; i < `REG_COUNT; i = i + 1) begin
-    assign s_regs[i] = rf[i];
+    //assign s_regs[i] = (i_wen & (i_waddr == i) & i != 0) ? i_wdata : rf[i];
+    assign s_regs[i] = (i_wen & (i_waddr == i)) ? i_wdata : rf[i];
   end
 
 endmodule
