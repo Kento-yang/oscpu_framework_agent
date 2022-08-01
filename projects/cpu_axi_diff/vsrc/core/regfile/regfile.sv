@@ -1,14 +1,20 @@
 `include "defines.sv"
 module regfile (
   input                         i_clk   ,
+
+  // from wbu:
   input                         i_wen   ,
   input        [`REG_ADDRW-1:0] i_waddr ,
   input        [`CPU_WIDTH-1:0] i_wdata ,
+
+  // from idu:
   input        [`REG_ADDRW-1:0] i_raddr1,
   input        [`REG_ADDRW-1:0] i_raddr2,
   output logic [`CPU_WIDTH-1:0] o_rdata1,
   output logic [`CPU_WIDTH-1:0] o_rdata2,
-  output       [`CPU_WIDTH-1:0] s_regs [`REG_COUNT-1:0]    // use for difftest.
+  
+  // difftest sim signals:
+  output       [`CPU_WIDTH-1:0] s_regs [`REG_COUNT-1:0]
 );
 
   logic [`CPU_WIDTH-1:0] rf [`REG_COUNT-1:0];

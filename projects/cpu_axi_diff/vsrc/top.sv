@@ -50,7 +50,9 @@ module top(
   input  logic [`CPU_WIDTH-1:0]     i_axi_r_data    ,
   input  logic                      i_axi_r_last    ,
   input  logic [3:0]                i_axi_r_id      ,
-  input  logic                      i_axi_r_user
+  input  logic                      i_axi_r_user    ,
+  output logic                      s_uart_out_valid,
+  output logic [7:0]                s_uart_out_char
 );
   // 1.rst : ////////////////////////////////////////////////////////
   logic rst_n_sync;
@@ -69,7 +71,9 @@ module top(
     .i_clk       (i_clk       ),
     .i_rst_n     (rst_n_sync  ),
     .UniIf_ifu_M (ifu_uni_if  ),
-    .UniIf_lsu_M (lsu_uni_if  )
+    .UniIf_lsu_M (lsu_uni_if  ),
+    .s_uart_out_valid(s_uart_out_valid),
+    .s_uart_out_char (s_uart_out_char)
   );
 
   // 3.arbite uni if://////////////////////////////////////////////

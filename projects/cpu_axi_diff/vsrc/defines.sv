@@ -23,18 +23,18 @@
 `define REG_ADDRW 5
 
 // opcode -> ins type:
-`define TYPE_R          7'b0110011  //R type for add/sub/sll/srl/sra/mul/mulh/mulhsu/mulhu/div/divu/rem/remu
-`define TYPE_R_W        7'b0111011  //R type for addw/subw/sllw/srlw/sraw/mulw/divw/divuw/remw/remuw 
-`define TYPE_S          7'b0100011  //S type
-`define TYPE_B          7'b1100011  //B type
-`define TYPE_I          7'b0010011  //I type for addi/slli/srli/srai/xori/ori/andi
-`define TYPE_I_W        7'b0011011  //I type for addiw/slliw/srliw/sraiw
-`define TYPE_I_LOAD     7'b0000011  //I type for lb/lh/lw/lbu/lhu
-`define TYPE_I_JALR     7'b1100111  //I type for jalr
-`define TYPE_I_EBRK     7'b1110011  //I type for ecall/ebreak
-`define TYPE_U_LUI      7'b0110111  //U type for lui
-`define TYPE_U_AUIPC    7'b0010111  //U type for auipc
-`define TYPE_J          7'b1101111  //J type for jal
+`define TYPE_R          7'b0110011  //  R type for add/sub/sll/srl/sra/mul/mulh/mulhsu/mulhu/div/divu/rem/remu
+`define TYPE_R_W        7'b0111011  //  R type for addw/subw/sllw/srlw/sraw/mulw/divw/divuw/remw/remuw 
+`define TYPE_S          7'b0100011  //  S type
+`define TYPE_B          7'b1100011  //  B type
+`define TYPE_I          7'b0010011  //  I type for addi/slli/srli/srai/xori/ori/andi
+`define TYPE_I_W        7'b0011011  //  I type for addiw/slliw/srliw/sraiw
+`define TYPE_I_LOAD     7'b0000011  //  I type for lb/lh/lw/lbu/lhu
+`define TYPE_I_JALR     7'b1100111  //  I type for jalr
+`define TYPE_U_LUI      7'b0110111  //  U type for lui
+`define TYPE_U_AUIPC    7'b0010111  //  U type for auipc
+`define TYPE_J          7'b1101111  //  J type for jal
+`define TYPE_SYS        7'b1110011  //SYS type for ecall/ebreak/csrrw/csrrs/csrrc
 
 // function3:
 `define FUNC3_ADD_SUB_MUL       3'b000        //ADDI ADDIW ADD ADDW SUB SUBW MUL MULW
@@ -70,6 +70,7 @@
 
 // EXU opreator:
 `define EXU_OPT_WIDTH   6
+`define EXU_NOP         `EXU_OPT_WIDTH'h0
 `define EXU_ADD         `EXU_OPT_WIDTH'h1
 `define EXU_SUB         `EXU_OPT_WIDTH'h2
 `define EXU_ADDW        `EXU_OPT_WIDTH'h3
@@ -99,3 +100,33 @@
 `define EXU_SLT         `EXU_OPT_WIDTH'h27
 `define EXU_SLTU        `EXU_OPT_WIDTH'h28
 
+
+// 4. for cpu csr ://////////////////////////////////////////////////////////////////////////////////////////
+
+// csr regfile define:
+`define CSR_COUNT (1<<`CSR_ADDRW)
+`define CSR_ADDRW 12
+`define ADDR_MSTATUS    `CSR_ADDRW'h300
+`define ADDR_MTVEC      `CSR_ADDRW'h305
+`define ADDR_MEPC       `CSR_ADDRW'h341
+`define ADDR_MCAUSE     `CSR_ADDRW'h342
+`define ADDR_MCYCLE     `CSR_ADDRW'hb00
+
+// csr fun3:
+`define FUNC3_ECL_EBRK  3'b000  //for ecall, ebreak.
+`define FUNC3_CSRRW     3'b001
+`define FUNC3_CSRRS     3'b010
+`define FUNC3_CSRRC     3'b011
+`define FUNC3_CSRRWI    3'b101
+`define FUNC3_CSRRSI    3'b110
+`define FUNC3_CSRRCI    3'b111
+
+// csr opreator for exu:
+`define CSR_OPT_WIDTH   2
+`define CSR_NOP         `CSR_OPT_WIDTH'b00
+`define CSR_RW          `CSR_OPT_WIDTH'b01
+`define CSR_RS          `CSR_OPT_WIDTH'b10
+`define CSR_RC          `CSR_OPT_WIDTH'b11
+
+`define CSR_SEL_REG     1'b0
+`define CSR_SEL_IMM     1'b1

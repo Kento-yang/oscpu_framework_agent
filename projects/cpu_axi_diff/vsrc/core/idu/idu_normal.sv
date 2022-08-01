@@ -1,24 +1,29 @@
 `include "defines.sv"
-module idu_logic(
+module idu_normal(
   input        [`INS_WIDTH-1:0]     i_ins         ,
-  output logic [`REG_ADDRW-1:0]     o_rs1id       , //for reg.
-  output logic [`REG_ADDRW-1:0]     o_rs2id       , //for reg.
-  output logic [`REG_ADDRW-1:0]     o_rdid        , //for reg.
-  output logic                      o_rdwen       , //for reg.
-  output logic [`CPU_WIDTH-1:0]     o_imm         , //for exu.
-  output logic [`EXU_SEL_WIDTH-1:0] o_src_sel     , //for exu.
-  output logic [`EXU_OPT_WIDTH-1:0] o_exopt       , //for exu.
+  // 1. for reg:
+  output logic [`REG_ADDRW-1:0]     o_rs1id       ,
+  output logic [`REG_ADDRW-1:0]     o_rs2id       ,
+  // 2. for exu:
+  output logic [`CPU_WIDTH-1:0]     o_imm         ,
+  output logic [`EXU_SEL_WIDTH-1:0] o_src_sel     ,
+  output logic [`EXU_OPT_WIDTH-1:0] o_exopt       ,
+  // 3. for lsu:
   output logic [2:0]                o_lsu_func3   , //for lsu.
   output logic                      o_lsu_lden    , //for lsu.
   output logic                      o_lsu_sten    , //for lsu.  
-  output logic                      o_jal         , //for pcu.
-  output logic                      o_jalr        , //for pcu.
-  output logic                      o_brch        , //for pcu.
-  output logic [2:0]                o_bfun3       , //for pcu.
+  // 4. for wbu:
+  output logic [`REG_ADDRW-1:0]     o_rdid        , //for wbu.
+  output logic                      o_rdwen       , //for wbu.
+  // 5. for bru:
+  output logic                      o_jal         , //for bru.
+  output logic                      o_jalr        , //for bru.
+  output logic                      o_brch        , //for bru.
+  output logic [2:0]                o_bfun3       , //for bru.
+  // 6. for sim:
   output logic [2:0]                s_id_err        //for sim. bit0:opc_err, bit1:func3_err, bit2:func7_err
 );
 
-  // ebreak & ecall are not supperted now. ebreak will cause system finish.
   wire [6:0] func7  = i_ins[31:25];
   wire [4:0] rs2id  = i_ins[24:20];
   wire [4:0] rs1id  = i_ins[19:15];
@@ -42,7 +47,6 @@ module idu_logic(
       `TYPE_I_W:      begin                   o_rs1id = rs1id;  o_rdid = rdid;  o_rdwen = 1'b1; o_imm = {{52{i_ins[31]}},i_ins[31:20]};                             end
       `TYPE_I_LOAD:   begin                   o_rs1id = rs1id;  o_rdid = rdid;  o_rdwen = 1'b1; o_imm = {{52{i_ins[31]}},i_ins[31:20]};                             end
       `TYPE_I_JALR:   begin                   o_rs1id = rs1id;  o_rdid = rdid;  o_rdwen = 1'b1; o_imm = {{52{i_ins[31]}},i_ins[31:20]};                             end
-      `TYPE_I_EBRK:   begin                   o_rs1id = rs1id;  o_rdid = rdid;                  o_imm = {{52{i_ins[31]}},i_ins[31:20]};                             end
       `TYPE_U_LUI:    begin                   o_rs1id = 0  ;    o_rdid = rdid;  o_rdwen = 1'b1; o_imm = {{32{i_ins[31]}},i_ins[31:12],12'b0};                       end //LUI: rdid = x0 + imm;
       `TYPE_U_AUIPC:  begin                                     o_rdid = rdid;  o_rdwen = 1'b1; o_imm = {{32{i_ins[31]}},i_ins[31:12],12'b0};                       end
       `TYPE_J:        begin                                     o_rdid = rdid;  o_rdwen = 1'b1; o_imm = {{44{i_ins[31]}},i_ins[19:12],i_ins[20],i_ins[30:21],1'b0}; end
@@ -58,7 +62,6 @@ module idu_logic(
     s_id_err        = 3'b0;
     case (opcode)
       `TYPE_S:        begin o_exopt = `EXU_ADD;  o_src_sel = `EXU_SEL_IMM; end // M[rs1+imm] = rs2
-      `TYPE_I_EBRK:   begin                                                end // no use, dirct break.
       `TYPE_I_LOAD:   begin o_exopt = `EXU_ADD;  o_src_sel = `EXU_SEL_IMM; end // rdid = M[rs1+imm]
       `TYPE_I_JALR:   begin o_exopt = `EXU_ADD;  o_src_sel = `EXU_SEL_PC4; end // rdid = PC+4
       `TYPE_J:        begin o_exopt = `EXU_ADD;  o_src_sel = `EXU_SEL_PC4; end // rdid = PC+4

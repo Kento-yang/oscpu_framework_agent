@@ -1,7 +1,8 @@
 module lsu (
   input  logic                    i_clk         ,
   input  logic                    i_rst_n       ,
-  
+  input  logic                    i_flush       ,
+
   // 1. axi interface to get data from mem:
   uni_if.Master                   UniIf_M       ,
 
@@ -14,22 +15,32 @@ module lsu (
   // 3. input comb signal from pre stage:
   input  logic  [`CPU_WIDTH-1:0]  i_exu_exres   ,
   input  logic  [`CPU_WIDTH-1:0]  i_exu_rs2     ,
-  input  logic  [`REG_ADDRW-1:0]  i_exu_rdid    ,
-  input  logic                    i_exu_rdwen   ,
   input  logic  [2:0]             i_exu_lsfunc3 ,
   input  logic                    i_exu_lden    ,
   input  logic                    i_exu_sten    ,
+  input  logic  [`REG_ADDRW-1:0]  i_exu_rdid    ,
+  input  logic                    i_exu_rdwen   ,
+  input  logic  [`CSR_ADDRW-1:0]  i_exu_csrdid  ,
+  input  logic                    i_exu_csrdwen , // csr dest write enable.
+  input  logic  [`CPU_WIDTH-1:0]  i_exu_csrd    ,
   input  logic  [`CPU_WIDTH-1:0]  s_exu_pc      ,
   input  logic  [`INS_WIDTH-1:0]  s_exu_ins     ,
   input  logic                    s_exu_nop     ,
 
-  // 4. output comb signal to post stage:
+  // 4. input comb signal from post stage (do not pipeline it!):
+  input  logic                    i_wbu_intr    , // use for lsu uni_if valid.
+
+  // 5. output comb signal to post stage:
   output logic  [`CPU_WIDTH-1:0]  o_lsu_lsres   ,
   output logic  [`CPU_WIDTH-1:0]  o_lsu_exres   ,
   output logic                    o_lsu_lden    ,
   output logic  [`REG_ADDRW-1:0]  o_lsu_rdid    ,
   output logic                    o_lsu_rdwen   ,
-  // 5 for sim:
+  output logic  [`CSR_ADDRW-1:0]  o_lsu_csrdid  ,
+  output logic                    o_lsu_csrdwen , // csr dest write enable.
+  output logic  [`CPU_WIDTH-1:0]  o_lsu_csrd    ,
+  
+  // 6. for sim:
   output logic  [`CPU_WIDTH-1:0]  s_lsu_pc      ,
   output logic  [`INS_WIDTH-1:0]  s_lsu_ins     ,
   output logic                    s_lsu_nop
@@ -51,8 +62,8 @@ module lsu (
   ) postvalid (
   	.i_clk      (i_clk       ), 
     .i_rst_n    (i_rst_n     ), 
-    .i_wen      (o_pre_ready ), 
-    .i_din      (i_pre_valid ), 
+    .i_wen      (i_flush | o_pre_ready ), 
+    .i_din      (i_flush ? 0: i_pre_valid ), 
     .o_dout     (pre_valid_r )
   );
   
@@ -60,21 +71,24 @@ module lsu (
 
   logic  [`CPU_WIDTH-1:0]  exu_exres_r    ;
   logic  [`CPU_WIDTH-1:0]  exu_rs2_r      ;
-  logic  [`REG_ADDRW-1:0]  exu_rdid_r     ;
-  logic                    exu_rdwen_r    ;
   logic  [2:0]             exu_lsfunc3_r  ;
   logic                    exu_lden_r     ;
   logic                    exu_sten_r     ;
+  logic  [`REG_ADDRW-1:0]  exu_rdid_r     ;
+  logic                    exu_rdwen_r    ;
+  logic  [`CSR_ADDRW-1:0]  exu_csrdid_r   ;
+  logic                    exu_csrdwen_r  ;
+  logic  [`CPU_WIDTH-1:0]  exu_csrd_r     ;
 
   stl_reg #(
-    .WIDTH      (3*`CPU_WIDTH+`REG_ADDRW+6+`INS_WIDTH+1),
+    .WIDTH      (4*`CPU_WIDTH+`REG_ADDRW+`CSR_ADDRW+7+`INS_WIDTH+1),
     .RESET_VAL  (0       )
   ) prereg (
   	.i_clk      (i_clk   ),
     .i_rst_n    (i_rst_n ),
-    .i_wen      (pre_sh ),
-    .i_din      ({i_exu_exres, i_exu_rs2, i_exu_rdid, i_exu_rdwen, i_exu_lsfunc3, i_exu_lden, i_exu_sten, s_exu_pc, s_exu_ins, s_exu_nop} ),
-    .o_dout     ({exu_exres_r, exu_rs2_r, exu_rdid_r, exu_rdwen_r, exu_lsfunc3_r, exu_lden_r, exu_sten_r, s_lsu_pc, s_lsu_ins, s_lsu_nop} )
+    .i_wen      (i_flush | pre_sh ),
+    .i_din      (i_flush ? 0: {i_exu_exres, i_exu_rs2, i_exu_lsfunc3, i_exu_lden, i_exu_sten, i_exu_rdid, i_exu_rdwen, i_exu_csrdid, i_exu_csrdwen, i_exu_csrd, s_exu_pc, s_exu_ins, s_exu_nop} ),
+    .o_dout     (             {exu_exres_r, exu_rs2_r, exu_lsfunc3_r, exu_lden_r, exu_sten_r, exu_rdid_r, exu_rdwen_r, exu_csrdid_r, exu_csrdwen_r, exu_csrd_r, s_lsu_pc, s_lsu_ins, s_lsu_nop} )
   );
 
   // 2. use interface to read/write, generate valid signals for post stage:////////////////////////////////////
@@ -83,7 +97,7 @@ module lsu (
   wire stor_en = pre_valid_r & exu_sten_r;
   wire ldst_en = load_en | stor_en ;
 
-  assign UniIf_M.valid  = ldst_en ;
+  assign UniIf_M.valid  = !i_wbu_intr & ldst_en ;
   assign UniIf_M.reqtyp = stor_en ; 
   assign UniIf_M.addr   = ldst_en ? exu_exres_r : `CPU_WIDTH'b0;
   assign UniIf_M.wdata  = stor_en ? exu_rs2_r   : `CPU_WIDTH'b0;
@@ -129,14 +143,17 @@ module lsu (
     .o_dout     (unif_rdata_r )
   );
 
-  assign  o_lsu_lsres  = UniIf_Sh ? unif_rdata : unif_rdata_r;
+  assign o_lsu_lsres  = UniIf_Sh ? unif_rdata : unif_rdata_r;
 
   // remind: due to the ready signal of post stage never be 0, so it is not necessary to keep the handshake of UniIf_M.
 
   // 4. use pre stage signals to generate comb logic for post stage://////////////////////////////////////////
-  assign  o_lsu_exres  = exu_exres_r  ;
-  assign  o_lsu_lden   = exu_lden_r   ;
-  assign  o_lsu_rdid   = exu_rdid_r   ;
-  assign  o_lsu_rdwen  = exu_rdwen_r  ;
+  assign o_lsu_exres   = exu_exres_r  ;
+  assign o_lsu_lden    = exu_lden_r   ;
+  assign o_lsu_rdid    = exu_rdid_r   ;
+  assign o_lsu_rdwen   = exu_rdwen_r  ;
+  assign o_lsu_csrdid  = exu_csrdid_r ;
+  assign o_lsu_csrdwen = exu_csrdwen_r;
+  assign o_lsu_csrd    = exu_csrd_r   ;
 
 endmodule
