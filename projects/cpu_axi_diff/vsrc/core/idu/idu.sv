@@ -44,9 +44,9 @@ module idu (
   output logic [2:0]                o_idu_bfun3   ,
   // 3.6 for next stage to pipe:
   output logic [`CPU_WIDTH-1:0]     o_idu_pc      ,
+  output logic [`INS_WIDTH-1:0]     o_idu_ins     ,
 
   // 4 for sim:
-  output logic [`INS_WIDTH-1:0]     s_idu_ins     ,
   output logic                      s_idu_nop     ,
   output logic [2:0]                s_idu_iderr     // bit0:opc_err, bit1:func3_err, bit2:func7_err
 );
@@ -172,7 +172,7 @@ module idu (
   assign o_idu_brch     = o_idu_sysins ? 1'b0           : nom_brch      ;
   assign o_idu_bfun3    = o_idu_sysins ? 3'b0           : nom_bfun3     ;
   assign o_idu_pc       = ifu_pc_r     ;
-  assign s_idu_ins      = ifu_ins_r    ;
+  assign o_idu_ins      = ifu_ins_r    ;
   assign s_idu_iderr    = o_idu_sysins ? 3'b0           : nom_s_id_err  ;
 
 endmodule

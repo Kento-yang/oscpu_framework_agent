@@ -17,8 +17,8 @@ module wbu (
   input   logic [`CSR_ADDRW-1:0]  i_lsu_csrdid  ,
   input   logic                   i_lsu_csrdwen ,
   input   logic [`CPU_WIDTH-1:0]  i_lsu_csrd    ,
-  input   logic [`CPU_WIDTH-1:0]  s_lsu_pc      ,
-  input   logic [`INS_WIDTH-1:0]  s_lsu_ins     ,
+  input   logic [`CPU_WIDTH-1:0]  i_lsu_pc      ,
+  input   logic [`INS_WIDTH-1:0]  i_lsu_ins     ,
   input   logic                   s_lsu_nop     ,
 
   // 3. output comb signal to post stage:
@@ -29,11 +29,12 @@ module wbu (
   output  logic [`CSR_ADDRW-1:0]  o_wbu_csrdid  ,
   output  logic                   o_wbu_csrdwen ,
   output  logic [`CPU_WIDTH-1:0]  o_wbu_csrd    ,
+  output  logic                   o_wbu_commit  ,
+
+  output  logic [`CPU_WIDTH-1:0]  o_wbu_pc      ,
+  output  logic [`INS_WIDTH-1:0]  o_wbu_ins     ,
 
   // 4 for sim:
-  output  logic [`CPU_WIDTH-1:0]  s_wbu_pc      ,
-  output  logic [`INS_WIDTH-1:0]  s_wbu_ins     ,
-  output  logic                   s_wbu_cmt     ,
   output  logic                   s_wbu_nop
 );
 
@@ -45,10 +46,10 @@ module wbu (
 
   assign o_pre_ready = o_post_valid & i_post_ready | !o_post_valid;
 
-  wire pre_sh, commit;
+  wire pre_sh;
 
   assign pre_sh = i_pre_valid & o_pre_ready;
-  assign commit = o_post_valid & i_post_ready;
+  assign o_wbu_commit = o_post_valid & i_post_ready;
 
   logic [`CPU_WIDTH-1:0]  lsu_exres_r  ;
   logic [`CPU_WIDTH-1:0]  lsu_lsres_r  ;
@@ -68,7 +69,7 @@ module wbu (
   	.i_clk      (i_clk   ),
     .i_rst_n    (i_rst_n ),
     .i_wen      (i_flush | pre_sh ),
-    .i_din      (i_flush ? 0 : {i_lsu_exres, i_lsu_lsres, i_lsu_lden, i_lsu_rdid, i_lsu_rdwen, i_lsu_csrdid, i_lsu_csrdwen, i_lsu_csrd, s_lsu_pc, s_lsu_ins, s_lsu_nop} ),
+    .i_din      (i_flush ? 0 : {i_lsu_exres, i_lsu_lsres, i_lsu_lden, i_lsu_rdid, i_lsu_rdwen, i_lsu_csrdid, i_lsu_csrdwen, i_lsu_csrd, i_lsu_pc, i_lsu_ins, s_lsu_nop} ),
     .o_dout     (              {lsu_exres_r, lsu_lsres_r, lsu_lden_r, lsu_rdid_r, lsu_rdwen_r, lsu_csrdid_r, lsu_csrdwen_r, lsu_csrd_r, lsu_pc_r, lsu_ins_r, s_wbu_nop} )
   );
 
@@ -88,13 +89,12 @@ module wbu (
   // 4. use pre stage signals to generate comb logic for post stage://////////////////////////////////////////
   
   assign o_wbu_rdid    = lsu_rdid_r   ;
-  assign o_wbu_rdwen   = commit & lsu_rdwen_r;
+  assign o_wbu_rdwen   = o_wbu_commit & lsu_rdwen_r;
   assign o_wbu_rd      = lsu_lden_r ? lsu_lsres_r : lsu_exres_r;
   assign o_wbu_csrdid  = lsu_csrdid_r ;
-  assign o_wbu_csrdwen = commit & lsu_csrdwen_r;
+  assign o_wbu_csrdwen = o_wbu_commit & lsu_csrdwen_r;
   assign o_wbu_csrd    = lsu_csrd_r   ;
-  assign s_wbu_pc      = lsu_pc_r     ;
-  assign s_wbu_ins     = lsu_ins_r    ;
-  assign s_wbu_cmt     = commit       ;
+  assign o_wbu_pc      = lsu_pc_r     ;
+  assign o_wbu_ins     = lsu_ins_r    ;
 
 endmodule

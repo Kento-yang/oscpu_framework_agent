@@ -23,8 +23,8 @@ module lsu (
   input  logic  [`CSR_ADDRW-1:0]  i_exu_csrdid  ,
   input  logic                    i_exu_csrdwen , // csr dest write enable.
   input  logic  [`CPU_WIDTH-1:0]  i_exu_csrd    ,
-  input  logic  [`CPU_WIDTH-1:0]  s_exu_pc      ,
-  input  logic  [`INS_WIDTH-1:0]  s_exu_ins     ,
+  input  logic  [`CPU_WIDTH-1:0]  i_exu_pc      ,
+  input  logic  [`INS_WIDTH-1:0]  i_exu_ins     ,
   input  logic                    s_exu_nop     ,
 
   // 4. input comb signal from post stage (do not pipeline it!):
@@ -39,10 +39,10 @@ module lsu (
   output logic  [`CSR_ADDRW-1:0]  o_lsu_csrdid  ,
   output logic                    o_lsu_csrdwen , // csr dest write enable.
   output logic  [`CPU_WIDTH-1:0]  o_lsu_csrd    ,
+  output logic  [`CPU_WIDTH-1:0]  o_lsu_pc      ,
+  output logic  [`INS_WIDTH-1:0]  o_lsu_ins     ,
   
   // 6. for sim:
-  output logic  [`CPU_WIDTH-1:0]  s_lsu_pc      ,
-  output logic  [`INS_WIDTH-1:0]  s_lsu_ins     ,
   output logic                    s_lsu_nop
 );
 
@@ -79,6 +79,8 @@ module lsu (
   logic  [`CSR_ADDRW-1:0]  exu_csrdid_r   ;
   logic                    exu_csrdwen_r  ;
   logic  [`CPU_WIDTH-1:0]  exu_csrd_r     ;
+  logic  [`CPU_WIDTH-1:0]  exu_pc_r       ;
+  logic  [`INS_WIDTH-1:0]  exu_ins_r      ;
 
   stl_reg #(
     .WIDTH      (4*`CPU_WIDTH+`REG_ADDRW+`CSR_ADDRW+7+`INS_WIDTH+1),
@@ -87,8 +89,8 @@ module lsu (
   	.i_clk      (i_clk   ),
     .i_rst_n    (i_rst_n ),
     .i_wen      (i_flush | pre_sh ),
-    .i_din      (i_flush ? 0: {i_exu_exres, i_exu_rs2, i_exu_lsfunc3, i_exu_lden, i_exu_sten, i_exu_rdid, i_exu_rdwen, i_exu_csrdid, i_exu_csrdwen, i_exu_csrd, s_exu_pc, s_exu_ins, s_exu_nop} ),
-    .o_dout     (             {exu_exres_r, exu_rs2_r, exu_lsfunc3_r, exu_lden_r, exu_sten_r, exu_rdid_r, exu_rdwen_r, exu_csrdid_r, exu_csrdwen_r, exu_csrd_r, s_lsu_pc, s_lsu_ins, s_lsu_nop} )
+    .i_din      (i_flush ? 0: {i_exu_exres, i_exu_rs2, i_exu_lsfunc3, i_exu_lden, i_exu_sten, i_exu_rdid, i_exu_rdwen, i_exu_csrdid, i_exu_csrdwen, i_exu_csrd, i_exu_pc, i_exu_ins, s_exu_nop} ),
+    .o_dout     (             {exu_exres_r, exu_rs2_r, exu_lsfunc3_r, exu_lden_r, exu_sten_r, exu_rdid_r, exu_rdwen_r, exu_csrdid_r, exu_csrdwen_r, exu_csrd_r, exu_pc_r, exu_ins_r, s_lsu_nop} )
   );
 
   // 2. use interface to read/write, generate valid signals for post stage:////////////////////////////////////
@@ -155,5 +157,7 @@ module lsu (
   assign o_lsu_csrdid  = exu_csrdid_r ;
   assign o_lsu_csrdwen = exu_csrdwen_r;
   assign o_lsu_csrd    = exu_csrd_r   ;
+  assign o_lsu_pc      = exu_pc_r     ;
+  assign o_lsu_ins     = exu_ins_r    ;
 
 endmodule

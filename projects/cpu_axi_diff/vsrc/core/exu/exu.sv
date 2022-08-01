@@ -33,8 +33,8 @@ module exu (
   input  logic                       i_idu_csrdwen , // csr dest write enable.
   // 2.4 dealy for bru:
   input  logic  [`CPU_WIDTH-1:0]     i_idu_pc      ,
+  input  logic  [`INS_WIDTH-1:0]     i_idu_ins     ,
   // 2.5 delay for difftest sim:
-  input  logic  [`INS_WIDTH-1:0]     s_idu_ins     ,
   input  logic                       s_idu_nop     ,
 
   // 3. output comb signal to post stage:
@@ -51,9 +51,9 @@ module exu (
   output logic  [`CSR_ADDRW-1:0]     o_exu_csrdid  ,
   output logic                       o_exu_csrdwen , // csr dest write enable.
   output logic  [`CPU_WIDTH-1:0]     o_exu_csrd    ,
+  output logic  [`CPU_WIDTH-1:0]     o_exu_pc      ,
+  output logic  [`INS_WIDTH-1:0]     o_exu_ins     ,
   // 4 for sim:
-  output logic  [`CPU_WIDTH-1:0]     s_exu_pc      ,
-  output logic  [`INS_WIDTH-1:0]     s_exu_ins     ,
   output logic                       s_exu_nop
 );
 
@@ -132,8 +132,7 @@ module exu (
   assign idu_csrdid  = i_pre_nop ? `CSR_ADDRW'b0 : i_idu_csrdid  ;
   assign idu_csrdwen = i_pre_nop ?  1'b0         : i_idu_csrdwen ;
   assign idu_pc      = i_idu_pc ;
-  
-  assign idu_ins     = i_pre_nop ? `INS_WIDTH'b0 : s_idu_ins     ;
+  assign idu_ins     = i_pre_nop ? `INS_WIDTH'b0 : i_idu_ins     ;
 
   stl_reg #(
     .WIDTH      (5*`CPU_WIDTH+`REG_ADDRW+10+`EXU_SEL_WIDTH+`EXU_OPT_WIDTH+`CSR_OPT_WIDTH+`CSR_ADDRW+`INS_WIDTH+1),
@@ -302,7 +301,7 @@ module exu (
   assign o_exu_csrdid  = idu_csrdid_r ;
   assign o_exu_csrdwen = idu_csrdwen_r;
   assign o_exu_csrd    = sys_csrres   ;
-  assign s_exu_pc      = idu_pc_r     ;
-  assign s_exu_ins     = idu_ins_r    ;
+  assign o_exu_pc      = idu_pc_r     ;
+  assign o_exu_ins     = idu_ins_r    ;
 
 endmodule
