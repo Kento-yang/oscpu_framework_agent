@@ -13,31 +13,40 @@ module csrfile (
   input  logic [`CSR_ADDRW-1:0] i_waddr ,
   input  logic [`CPU_WIDTH-1:0] i_wdata ,
 
-  // from intr:
-  input  logic                  i_mepc_wen      ,   // ecall.
-  input  logic [`CPU_WIDTH-1:0] i_mepc_wdata    ,   // ecall.
-  input  logic                  i_mcause_wen    ,   // ecall.
-  input  logic [`CPU_WIDTH-1:0] i_mcause_wdata  ,   // ecall.
-  input  logic                  i_mstatus_wen   ,   // ecall.
-  input  logic [`CPU_WIDTH-1:0] i_mstatus_wdata ,   // ecall.
-  output logic [`CPU_WIDTH-1:0] o_mtvec         ,   // ecall.
-  output logic [`CPU_WIDTH-1:0] o_mstatus       ,   // ecall.
+  // connect excp/intr:
+  input  logic                  i_mepc_wen      ,   // ecall / iru.
+  input  logic [`CPU_WIDTH-1:0] i_mepc_wdata    ,   // ecall / iru.
+  input  logic                  i_mcause_wen    ,   // ecall / iru.
+  input  logic [`CPU_WIDTH-1:0] i_mcause_wdata  ,   // ecall / iru.
+  input  logic                  i_mstatus_wen   ,   // ecall / iru.
+  input  logic [`CPU_WIDTH-1:0] i_mstatus_wdata ,   // ecall / iru.
+  output logic [`CPU_WIDTH-1:0] o_mtvec         ,   // ecall / iru.
+  output logic [`CPU_WIDTH-1:0] o_mstatus       ,   // ecall / iru.
   output logic [`CPU_WIDTH-1:0] o_mepc          ,   // mret.
+  output logic [`CPU_WIDTH-1:0] o_mip           ,
+  output logic [`CPU_WIDTH-1:0] o_mie           ,
+
+  // connect clint:
+  input  logic                  i_clint_mtip    ,
 
   // for difftest:
   output logic [`CPU_WIDTH-1:0] s_mtvec         ,
   output logic [`CPU_WIDTH-1:0] s_mepc          ,
   output logic [`CPU_WIDTH-1:0] s_mstatus       ,
   output logic [`CPU_WIDTH-1:0] s_mcause        ,
-  output logic [`CPU_WIDTH-1:0] s_mcycle
+  output logic [`CPU_WIDTH-1:0] s_mcycle        ,
+  output logic [`CPU_WIDTH-1:0] s_mie           ,
+  output logic [`CPU_WIDTH-1:0] s_mip
 );
 
   // 1. csr reg file: //////////////////////////////////////////////////////////////////
-  logic [`CPU_WIDTH-1:0] mepc   ;
-  logic [`CPU_WIDTH-1:0] mtvec  ;
-  logic [`CPU_WIDTH-1:0] mcause ;
-  logic [`CPU_WIDTH-1:0] mstatus;
-  logic [`CPU_WIDTH-1:0] mcycle ;
+  logic [`CPU_WIDTH-1:0] mepc   ; // Machine exception program counter
+  logic [`CPU_WIDTH-1:0] mtvec  ; // Machine trap-handler base address
+  logic [`CPU_WIDTH-1:0] mcause ; // Machine trap cause
+  logic [`CPU_WIDTH-1:0] mstatus; // Machine status register
+  logic [`CPU_WIDTH-1:0] mcycle ; // Machine cycle.
+  logic [`CPU_WIDTH-1:0] mie    ; // Machine interrupt eanble reg
+  logic [`CPU_WIDTH-1:0] mip    ; // Machine interrupt pending reg
 
   // 2. read csr  reg file: ////////////////////////////////////////////////////////////
   wire ren_mepc    = i_ren & (i_raddr == `ADDR_MEPC   );
@@ -45,29 +54,28 @@ module csrfile (
   wire ren_mcause  = i_ren & (i_raddr == `ADDR_MCAUSE );
   wire ren_mstatus = i_ren & (i_raddr == `ADDR_MSTATUS);
   wire ren_mcycle  = i_ren & (i_raddr == `ADDR_MCYCLE );
+  wire ren_mie     = i_ren & (i_raddr == `ADDR_MIE    );
+  wire ren_mip     = i_ren & (i_raddr == `ADDR_MIP    );
 
   assign o_rdata =  ren_mepc    ? mepc    : 
                   ( ren_mtvec   ? mtvec   : 
                   ( ren_mcause  ? mcause  : 
                   ( ren_mstatus ? mstatus : 
-                  ( ren_mcycle  ? mcycle  : `CPU_WIDTH'b0 ))));
+                  ( ren_mcycle  ? mcycle  : 
+                  ( ren_mie     ? mie     :
+                  ( ren_mip     ? mip     : `CPU_WIDTH'b0 ))))));
 
-  assign o_mtvec = mtvec    ;
-  assign o_mepc  = mepc     ;
-  assign o_mstatus = mstatus;
+  assign o_mtvec   = mtvec    ;
+  assign o_mepc    = mepc     ;
+  assign o_mstatus = mstatus  ;
+  assign o_mie     = mie      ;
+  assign o_mip     = mip      ;
 
   // 3. write csr  reg file: ////////////////////////////////////////////////////////////
-  wire wen_mepc    = (i_wen & (i_waddr == `ADDR_MEPC   )) | i_mepc_wen   ;
-  wire wen_mcause  = (i_wen & (i_waddr == `ADDR_MCAUSE )) | i_mcause_wen ;
-  wire wen_mtvec   = (i_wen & (i_waddr == `ADDR_MTVEC  ));
-  wire wen_mstatus = (i_wen & (i_waddr == `ADDR_MSTATUS)) | i_mstatus_wen;
-
-  wire [`CPU_WIDTH-1:0] wdata_mepc    = i_mepc_wen    ? i_mepc_wdata    : i_wdata;
-  wire [`CPU_WIDTH-1:0] wdata_mcause  = i_mcause_wen  ? i_mcause_wdata  : i_wdata;
-  wire [`CPU_WIDTH-1:0] wdata_mtvec   = i_wdata;
-  wire [`CPU_WIDTH-1:0] wdata_mstatus = i_mstatus_wen ? i_mstatus_wdata : i_wdata;
-  wire [`CPU_WIDTH-1:0] wdata_mcycle  =  (i_wen & (i_waddr == `ADDR_MCYCLE )) ? i_wdata : mcycle+1;
-
+  // 3.1 mepc: //////////////////////////////////////////////////////////////////////////
+  wire wen_mepc = (i_wen & (i_waddr == `ADDR_MEPC)) | i_mepc_wen ;
+  wire [`CPU_WIDTH-1:0] wdata_mepc  = i_mepc_wen  ? i_mepc_wdata : i_wdata;
+  
   stl_reg #(
     .WIDTH    (`CPU_WIDTH   ),
     .RESET_VAL(`CPU_WIDTH'b0)
@@ -78,6 +86,10 @@ module csrfile (
     .i_din    (wdata_mepc   ),
     .o_dout   (mepc         )
   );
+
+  // 3.2 mcause: //////////////////////////////////////////////////////////////////////////
+  wire wen_mcause = (i_wen & (i_waddr == `ADDR_MCAUSE )) | i_mcause_wen ;
+  wire [`CPU_WIDTH-1:0] wdata_mcause = i_mcause_wen ? i_mcause_wdata : i_wdata;
 
   stl_reg #(
     .WIDTH    (`CPU_WIDTH   ),
@@ -90,6 +102,10 @@ module csrfile (
     .o_dout   (mcause       )
   );
 
+  // 3.3 mtvec: //////////////////////////////////////////////////////////////////////////
+  wire wen_mtvec = (i_wen & (i_waddr == `ADDR_MTVEC));
+  wire [`CPU_WIDTH-1:0] wdata_mtvec = i_wdata;
+
   stl_reg #(
     .WIDTH    (`CPU_WIDTH   ),
     .RESET_VAL(`CPU_WIDTH'b0)
@@ -100,6 +116,10 @@ module csrfile (
     .i_din    (wdata_mtvec  ),
     .o_dout   (mtvec        )
   );
+
+  // 3.4 mstatus: //////////////////////////////////////////////////////////////////////////
+  wire wen_mstatus = (i_wen & (i_waddr == `ADDR_MSTATUS)) | i_mstatus_wen;
+  wire [`CPU_WIDTH-1:0] wdata_mstatus = i_mstatus_wen ? i_mstatus_wdata : i_wdata;
 
   stl_reg #(
     .WIDTH    (`CPU_WIDTH   ),
@@ -112,6 +132,9 @@ module csrfile (
     .o_dout   (mstatus      )
   );
 
+  // 3.5 mcycle: //////////////////////////////////////////////////////////////////////////
+  wire [`CPU_WIDTH-1:0] wdata_mcycle = (i_wen & (i_waddr == `ADDR_MCYCLE)) ? i_wdata : mcycle+1;
+
   stl_reg #(
     .WIDTH    (`CPU_WIDTH   ),
     .RESET_VAL(`CPU_WIDTH'b0)
@@ -123,11 +146,43 @@ module csrfile (
     .o_dout   (mcycle       )
   );
 
-  // use for difftest sim :/
+  // 3.6 mie: //////////////////////////////////////////////////////////////////////////
+  wire wen_mie = (i_wen & (i_waddr == `ADDR_MIE));
+  wire [`CPU_WIDTH-1:0] wdata_mie = i_wdata;
+
+  stl_reg #(
+    .WIDTH    (`CPU_WIDTH   ),
+    .RESET_VAL(`CPU_WIDTH'b0)
+  ) reg_mie (
+    .i_clk    (i_clk        ),
+    .i_rst_n  (i_rst_n      ),
+    .i_wen    (wen_mie      ),
+    .i_din    (wdata_mie    ),
+    .o_dout   (mie          )
+  );
+
+  // 3.7 mip: //////////////////////////////////////////////////////////////////////////
+  assign mip[`M_MIP_MTIP] = i_clint_mtip;
+
+  wire wen_mip = (i_wen & (i_waddr == `ADDR_MIP )) ;
+  stl_reg #(
+    .WIDTH    (`CPU_WIDTH-1 ),
+    .RESET_VAL(0)
+  ) reg_mip (
+    .i_clk    (i_clk        ),
+    .i_rst_n  (i_rst_n      ),
+    .i_wen    (wen_mip      ),
+    .i_din    ({i_wdata[`CPU_WIDTH-1:`M_MIP_MTIP+1], i_wdata[`M_MIP_MTIP-1:0]}),
+    .o_dout   ({    mip[`CPU_WIDTH-1:`M_MIP_MTIP+1],     mip[`M_MIP_MTIP-1:0]})
+  );
+
+  // 4. use for difftest sim :///////////////////////////////////////////////////////////
   assign s_mepc   = wen_mepc    ? wdata_mepc   : mepc    ;
   assign s_mcause = wen_mcause  ? wdata_mcause : mcause  ;
   assign s_mtvec  = wen_mtvec   ? wdata_mtvec  : mtvec   ;
   assign s_mstatus= wen_mstatus ? wdata_mstatus: mstatus ;
   assign s_mcycle = wdata_mcycle;
+  assign s_mie    = wen_mie     ? wdata_mie    : mie     ;
+  assign s_mip    = wen_mip     ? {i_wdata[`CPU_WIDTH-1:`M_MIP_MTIP+1],mip[`M_MIP_MTIP],i_wdata[`M_MIP_MTIP-1:0]} : mip ;
 
 endmodule

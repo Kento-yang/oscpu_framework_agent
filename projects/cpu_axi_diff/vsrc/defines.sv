@@ -104,13 +104,24 @@
 // 4. for cpu csr ://////////////////////////////////////////////////////////////////////////////////////////
 
 // csr regfile define:
-`define CSR_COUNT (1<<`CSR_ADDRW)
-`define CSR_ADDRW 12
+`define M_MODE          2'b11
+`define CSR_COUNT       (1<<`CSR_ADDRW)
+`define CSR_ADDRW       12
 `define ADDR_MSTATUS    `CSR_ADDRW'h300
 `define ADDR_MTVEC      `CSR_ADDRW'h305
 `define ADDR_MEPC       `CSR_ADDRW'h341
 `define ADDR_MCAUSE     `CSR_ADDRW'h342
 `define ADDR_MCYCLE     `CSR_ADDRW'hb00
+`define ADDR_MIP        `CSR_ADDRW'h344
+`define ADDR_MIE        `CSR_ADDRW'h304
+
+// csr_file bit define:
+`define M_STATUS_MIE    3      // machine level interrupt enable.
+`define M_STATUS_MPIE   7      // machine level previous interrupt enable.
+`define M_STATUS_MPP    12:11  // machine level previous privilege mode
+
+`define M_MIE_MTIE      7      // machine interrupt enable, machine timer interrupt enable.
+`define M_MIP_MTIP      7      // machine interrupt pending, machine timer interrupt pending.
 
 // csr fun3:
 `define FUNC3_ECL_EBRK  3'b000  //for ecall, ebreak.
@@ -130,3 +141,14 @@
 
 `define CSR_SEL_REG     1'b0
 `define CSR_SEL_IMM     1'b1
+
+// clint define:
+`define CLINT_BASE_ADDR `CPU_WIDTH'h2000000                // 0x0200_0000~0x0200_ffff
+`define CLINT_END_ADDR  `CPU_WIDTH'h200ffff                // 0x0200_0000~0x0200_ffff
+`define MSIP_ADDR       `CLINT_BASE_ADDR+`CPU_WIDTH'h0000
+`define MTIMECMP_ADDR   `CLINT_BASE_ADDR+`CPU_WIDTH'h4000
+`define MTIME_ADDR      `CLINT_BASE_ADDR+`CPU_WIDTH'hBFF8
+
+// intr define:
+`define IRQ_TIMER       `CPU_WIDTH'h80000000_00000007
+`define IRQ_ECALL       `CPU_WIDTH'd11

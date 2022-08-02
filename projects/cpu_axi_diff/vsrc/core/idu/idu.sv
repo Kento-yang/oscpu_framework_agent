@@ -45,9 +45,9 @@ module idu (
   // 3.6 for next stage to pipe:
   output logic [`CPU_WIDTH-1:0]     o_idu_pc      ,
   output logic [`INS_WIDTH-1:0]     o_idu_ins     ,
-
+  output logic                      o_idu_nop     ,
+  
   // 4 for sim:
-  output logic                      s_idu_nop     ,
   output logic [2:0]                s_idu_iderr     // bit0:opc_err, bit1:func3_err, bit2:func7_err
 );
 
@@ -61,8 +61,10 @@ module idu (
   assign o_pre_ready =  o_post_valid & i_post_ready & (!i_pre_stall) | !o_post_valid ;
   assign pre_sh = i_pre_valid & o_pre_ready;
 
-  logic [`CPU_WIDTH-1:0] ifu_pc    ,ifu_pc_r;
-  logic [`INS_WIDTH-1:0] ifu_ins   ,ifu_ins_r;
+  logic [`CPU_WIDTH-1:0] ifu_pc , ifu_pc_r;
+  logic [`INS_WIDTH-1:0] ifu_ins, ifu_ins_r;
+  logic                  ifu_nop_r;
+
 
   assign ifu_pc     = i_ifu_pc;
   assign ifu_ins    = i_pre_nop ? `INS_WIDTH'h13 : i_ifu_ins;  // 0x13 == ADDI x0,x0,0 == nop.
@@ -75,7 +77,7 @@ module idu (
     .i_rst_n    (i_rst_n              ),
     .i_wen      (i_flush | pre_sh     ),
     .i_din      (i_flush ? 0: {ifu_ins  , ifu_pc  , i_pre_nop}),
-    .o_dout     (             {ifu_ins_r, ifu_pc_r, s_idu_nop})
+    .o_dout     (             {ifu_ins_r, ifu_pc_r, ifu_nop_r})
   );
 
   // 2. generate valid signals for post stage://////////////////////////////////////////////////////////////////
@@ -173,6 +175,7 @@ module idu (
   assign o_idu_bfun3    = o_idu_sysins ? 3'b0           : nom_bfun3     ;
   assign o_idu_pc       = ifu_pc_r     ;
   assign o_idu_ins      = ifu_ins_r    ;
+  assign o_idu_nop      = ifu_nop_r    ;
   assign s_idu_iderr    = o_idu_sysins ? 3'b0           : nom_s_id_err  ;
 
 endmodule

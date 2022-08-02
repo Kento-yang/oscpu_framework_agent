@@ -9,6 +9,9 @@ elif [ $1 = "time" ]; then
     bash build.sh -e cpu_axi_diff -d -s -a "-i custom-output/time-test/amtest-time-test.bin --dump-wave -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -w -b
 elif [ $1 = "yield" ]; then
     bash build.sh -e cpu_axi_diff -d -s -a "-i custom-output/yield-test/amtest-yield-test.bin --dump-wave -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -w -b
+elif [ $1 = "interrupt" ]; then
+    bash build.sh -e cpu_axi_diff -d -s -a "-i custom-output/interrupt-test/amtest-interrupt-test.bin --dump-wave -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -w -b
+    #bash build.sh -e cpu_axi_diff -d -s -a "-i custom-output/interrupt-test/amtest-interrupt-test.bin -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -b
 else
     bash build.sh -e cpu_axi_diff -d -s -a "-i non-output/cpu-tests/$1-cpu-tests.bin --dump-wave -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -w -b
 fi

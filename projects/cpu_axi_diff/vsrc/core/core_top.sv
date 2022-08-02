@@ -9,8 +9,12 @@ module core_top(
 );
 
   // control signals:
-  logic [`CPU_WIDTH-1:0]  pre_pc, ifu_pc, idu_pc, exu_pc, lsu_pc, wbu_pc;
+  logic [`CPU_WIDTH-1:0]  pre_pc, ifu_pc, idu_pc, exu_pc, lsu_pc, wbu_pc, iru_pc;
   logic [`INS_WIDTH-1:0]  ifu_ins, idu_ins, exu_ins, lsu_ins, wbu_ins;
+  logic                            idu_nop, exu_nop, lsu_nop, wbu_nop;
+
+  logic                   clint_ren  , clint_wen  , clint_mtip ;
+  logic [`CPU_WIDTH-1:0]  clint_raddr, clint_waddr, clint_rdata, clint_wdata;
 
   logic                   ifid_nop;               // for branch adventure
   logic                   ifid_stall, idex_nop;   // for data adventure
@@ -20,19 +24,19 @@ module core_top(
   logic                   exu_valid , exu_ready;  // pipeline shakehands: id/ex -> ex/ls
   logic                   lsu_valid , lsu_ready;  // pipeline shakehands: ex/ls -> ls/wb
   logic                   wbu_valid , wbu_ready;  // pipeline shakehands: ls/wb -> wb/reg.
-  logic                   wbu_commit;
-  logic                   wbu_intr  ;
-  logic [`CPU_WIDTH-1:0]  wbu_intrpc;
-  logic                   flush;
+  logic                   iru_excp  , iru_intr;
+  logic                   wbu_commit;             // wbu_valid & wbu_ready & !iru_intr.
+  logic                   unif_trans_done, flush;
 
-  assign wbu_ready = wbu_intr ? (ifu_valid & ifu_ready): 1'b1; // if intr, waiting for ifu axi done.
-  assign flush     = wbu_intr & wbu_commit;
+  assign unif_trans_done = (UniIf_ifu_M.valid & UniIf_ifu_M.ready | !UniIf_ifu_M.valid) & (UniIf_lsu_M.valid & UniIf_lsu_M.ready | !UniIf_lsu_M.valid);
+  assign wbu_ready = (iru_excp | iru_intr) ? unif_trans_done: 1'b1;         // if excp/intr, waiting for unif done.
+  assign flush     = (iru_excp | iru_intr) & (wbu_valid & wbu_ready);       // iru_intr not commit.
 
   // simulation signals:
   logic [2:0]             s_id_err ;
   logic [`CPU_WIDTH-1:0]  s_regs [`REG_COUNT-1:0];
-  logic                   s_idu_nop, s_exu_nop, s_lsu_nop, s_wbu_nop;
-  logic [`CPU_WIDTH-1:0]  s_mtvec, s_mepc, s_mstatus, s_mcause, s_mcycle;
+  logic [`CPU_WIDTH-1:0]  s_mtvec, s_mepc, s_mstatus, s_mcause, s_mcycle, s_mie, s_mip;
+  logic                   s_lsu_lsclint, s_wbu_lsclint;
 
   // 2.1 ifu ////////////////////////////////////////////////////////
 
@@ -112,7 +116,7 @@ module core_top(
     .o_idu_bfun3    (idu_bfun3    ),
     .o_idu_pc       (idu_pc       ),
     .o_idu_ins      (idu_ins      ),
-    .s_idu_nop      (s_idu_nop    ),
+    .o_idu_nop      (idu_nop      ),
     .s_idu_iderr    (s_id_err     )
   );
 
@@ -127,11 +131,11 @@ module core_top(
   logic [2:0]                 exu_lsfunc3;
   logic                       exu_lden,exu_sten;
   // for wbu:
-  logic [`REG_ADDRW-1:0]      exu_rdid;
-  logic                       exu_rdwen;
-  logic [`CSR_ADDRW-1:0]      exu_csrsid ;
-  logic                       exu_csrsren;
-  logic [`CPU_WIDTH-1:0]      exu_csrd   ;
+  logic [`REG_ADDRW-1:0]      exu_rdid    ;
+  logic                       exu_rdwen   ;
+  logic [`CSR_ADDRW-1:0]      exu_csrdid  ;
+  logic                       exu_csrdwen ;
+  logic [`CPU_WIDTH-1:0]      exu_csrd    ;
 
   exu u_exu(
     .i_clk          (i_clk          ),
@@ -161,7 +165,7 @@ module core_top(
     .i_idu_csrdwen  (idu_csrdwen    ),
     .i_idu_pc       (idu_pc         ),
     .i_idu_ins      (idu_ins        ),
-    .s_idu_nop      (s_idu_nop      ),
+    .i_idu_nop      (idu_nop        ),
     .o_exu_rs2      (exu_rs2        ),
     .o_exu_lsfunc3  (exu_lsfunc3    ),
     .o_exu_lden     (exu_lden       ),
@@ -170,12 +174,12 @@ module core_top(
     .o_exu_rdid     (exu_rdid       ),
     .o_exu_rdwen    (exu_rdwen      ),
     .o_exu_res      (exu_exres      ),
-    .o_exu_csrdid   (exu_csrsid     ),
-    .o_exu_csrdwen  (exu_csrsren    ),
+    .o_exu_csrdid   (exu_csrdid     ),
+    .o_exu_csrdwen  (exu_csrdwen    ),
     .o_exu_csrd     (exu_csrd       ),
     .o_exu_pc       (exu_pc         ),
     .o_exu_ins      (exu_ins        ),
-    .s_exu_nop      (s_exu_nop      )
+    .o_exu_nop      (exu_nop        )
   );
 
   // 2.4 lsu ///////////////////////////////////////////////
@@ -185,8 +189,8 @@ module core_top(
   logic                       lsu_lden   ;
   logic [`REG_ADDRW-1:0]      lsu_rdid   ;
   logic                       lsu_rdwen  ;
-  logic [`CSR_ADDRW-1:0]      lsu_csrsid ;
-  logic                       lsu_csrsren;
+  logic [`CSR_ADDRW-1:0]      lsu_csrdid ;
+  logic                       lsu_csrdwen;
   logic [`CPU_WIDTH-1:0]      lsu_csrd   ;
 
   lsu u_lsu(
@@ -205,24 +209,30 @@ module core_top(
     .i_exu_sten    (exu_sten      ),
     .i_exu_rdid    (exu_rdid      ),
     .i_exu_rdwen   (exu_rdwen     ),
-    .i_exu_csrdid  (exu_csrsid    ),
-    .i_exu_csrdwen (exu_csrsren   ),
+    .i_exu_csrdid  (exu_csrdid    ),
+    .i_exu_csrdwen (exu_csrdwen   ),
     .i_exu_csrd    (exu_csrd      ),
-    .i_wbu_intr    (wbu_intr      ),
     .i_exu_pc      (exu_pc        ),
     .i_exu_ins     (exu_ins       ),
-    .s_exu_nop     (s_exu_nop     ),
+    .i_exu_nop     (exu_nop       ),
+    .o_clint_ren   (clint_ren     ),
+    .o_clint_raddr (clint_raddr   ),
+    .i_clint_rdata (clint_rdata   ),
+    .o_clint_wen   (clint_wen     ),
+    .o_clint_waddr (clint_waddr   ),
+    .o_clint_wdata (clint_wdata   ),
     .o_lsu_lsres   (lsu_lsres     ),
     .o_lsu_exres   (lsu_exres     ),
     .o_lsu_lden    (lsu_lden      ),
     .o_lsu_rdid    (lsu_rdid      ),
     .o_lsu_rdwen   (lsu_rdwen     ),
-    .o_lsu_csrdid  (lsu_csrsid    ),
-    .o_lsu_csrdwen (lsu_csrsren   ),
+    .o_lsu_csrdid  (lsu_csrdid    ),
+    .o_lsu_csrdwen (lsu_csrdwen   ),
     .o_lsu_csrd    (lsu_csrd      ),
     .o_lsu_pc      (lsu_pc        ),
     .o_lsu_ins     (lsu_ins       ),
-    .s_lsu_nop     (s_lsu_nop     )
+    .o_lsu_nop     (lsu_nop       ),
+    .s_lsu_lsclint (s_lsu_lsclint )
   );
 
   // 2.5 wbu ///////////////////////////////////////////////
@@ -230,8 +240,8 @@ module core_top(
   logic [`REG_ADDRW-1:0]      wbu_rdid   ;
   logic                       wbu_rdwen  ;
   logic [`CPU_WIDTH-1:0]      wbu_rd     ;
-  logic [`CSR_ADDRW-1:0]      wbu_csrsid ;
-  logic                       wbu_csrsren;
+  logic [`CSR_ADDRW-1:0]      wbu_csrdid ;
+  logic                       wbu_csrdwen;
   logic [`CPU_WIDTH-1:0]      wbu_csrd   ;
 
   wbu u_wbu(
@@ -247,24 +257,29 @@ module core_top(
     .i_lsu_lden    (lsu_lden     ),
     .i_lsu_rdid    (lsu_rdid     ),
     .i_lsu_rdwen   (lsu_rdwen    ),
-    .i_lsu_csrdid  (lsu_csrsid   ),
-    .i_lsu_csrdwen (lsu_csrsren  ),
+    .i_lsu_csrdid  (lsu_csrdid   ),
+    .i_lsu_csrdwen (lsu_csrdwen  ),
     .i_lsu_csrd    (lsu_csrd     ),
     .i_lsu_pc      (lsu_pc       ),
     .i_lsu_ins     (lsu_ins      ),
-    .s_lsu_nop     (s_lsu_nop    ),
+    .i_iru_intr    (iru_intr     ),
+    .i_lsu_nop     (lsu_nop      ),
+    .s_lsu_lsclint (s_lsu_lsclint),
     .o_wbu_rdid    (wbu_rdid     ),
     .o_wbu_rdwen   (wbu_rdwen    ),
     .o_wbu_rd      (wbu_rd       ),
-    .o_wbu_csrdid  (wbu_csrsid   ),
-    .o_wbu_csrdwen (wbu_csrsren  ),
+    .o_wbu_csrdid  (wbu_csrdid   ),
+    .o_wbu_csrdwen (wbu_csrdwen  ),
     .o_wbu_csrd    (wbu_csrd     ),
     .o_wbu_commit  (wbu_commit   ),
     .o_wbu_pc      (wbu_pc       ),
     .o_wbu_ins     (wbu_ins      ),
-    .s_wbu_nop     (s_wbu_nop    )
+    .o_wbu_nop     (wbu_nop      ),
+    .s_wbu_lsclint (s_wbu_lsclint)
   );
 
+  logic [`CPU_WIDTH-1:0]  mie           ;
+  logic [`CPU_WIDTH-1:0]  mip           ;
   logic [`CPU_WIDTH-1:0]  mtvec         ;
   logic [`CPU_WIDTH-1:0]  mepc          ;
   logic [`CPU_WIDTH-1:0]  mstatus       ;
@@ -275,14 +290,19 @@ module core_top(
   logic                   mstatus_wen   ;
   logic [`CPU_WIDTH-1:0]  mstatus_wdata ;
 
-  intr u_intr(
+  iru u_iru(
     .i_clk           (i_clk           ),
     .i_rst_n         (i_rst_n         ),
-    .i_wbu_commit    (wbu_commit      ),
-    .i_wbu_ins       (wbu_ins       ),
-    .i_wbu_pc        (wbu_pc        ),
-    .o_wbu_intr      (wbu_intr        ),
-    .o_wbu_intrpc    (wbu_intrpc      ),
+    .i_wbu_valid     (wbu_valid       ),
+    .i_wbu_ready     (wbu_ready       ),
+    .i_wbu_nop       (wbu_nop         ),
+    .i_wbu_ins       (wbu_ins         ),
+    .i_wbu_pc        (wbu_pc          ),
+    .o_iru_excp      (iru_excp        ),
+    .o_iru_intr      (iru_intr        ),
+    .o_iru_pc        (iru_pc          ),
+    .i_mie           (mie             ),
+    .i_mip           (mip             ),
     .i_mtvec         (mtvec           ),
     .i_mepc          (mepc            ),
     .i_mstatus       (mstatus         ),
@@ -292,6 +312,18 @@ module core_top(
     .o_mcause_wdata  (mcause_wdata    ),
     .o_mstatus_wen   (mstatus_wen     ),
     .o_mstatus_wdata (mstatus_wdata   )
+  );
+
+  clint u_clint(
+    .i_clk         (i_clk         ),
+    .i_rst_n       (i_rst_n       ),
+    .i_clint_ren   (clint_ren     ),
+    .i_clint_raddr (clint_raddr   ),
+    .o_clint_rdata (clint_rdata   ),
+    .i_clint_wen   (clint_wen     ),
+    .i_clint_waddr (clint_waddr   ),
+    .i_clint_wdata (clint_wdata   ),
+    .o_clint_mtip  (clint_mtip    )
   );
 
   // 2.6 bypass, regfile read/write. ///////////////////////
@@ -331,8 +363,8 @@ module core_top(
     .i_ren           (idu_csrsren    ),
     .i_raddr         (idu_csrsid     ),
     .o_rdata         (idu_csrs       ),
-    .i_wen           (wbu_csrsren    ),
-    .i_waddr         (wbu_csrsid     ),
+    .i_wen           (wbu_csrdwen    ),
+    .i_waddr         (wbu_csrdid     ),
     .i_wdata         (wbu_csrd       ),
     .i_mepc_wen      (mepc_wen       ),
     .i_mepc_wdata    (mepc_wdata     ),
@@ -343,34 +375,40 @@ module core_top(
     .o_mtvec         (mtvec          ),
     .o_mstatus       (mstatus        ),
     .o_mepc          (mepc           ),
+    .o_mip           (mip            ),
+    .o_mie           (mie            ),
+    .i_clint_mtip    (clint_mtip     ),
     .s_mtvec         (s_mtvec        ),
     .s_mepc          (s_mepc         ),
     .s_mstatus       (s_mstatus      ),
     .s_mcause        (s_mcause       ),
-    .s_mcycle        (s_mcycle       )
+    .s_mcycle        (s_mcycle       ),
+    .s_mie           (s_mie          ),
+    .s_mip           (s_mip          )
   );
 
   // 2.7 bru ///////////////////////////////////////////////
 
   bru u_bru(
-    .i_clk        (i_clk        ),
-    .i_rst_n      (i_rst_n      ),
-    .i_idu_valid  (idu_valid    ),
-    .i_idu_rs1id  (idu_rs1id    ),
-    .i_exu_rdid   (exu_rdid     ),
-    .i_jal        (idu_jal      ),
-    .i_jalr       (idu_jalr     ),
-    .i_brch       (idu_brch     ),
-    .i_bfun3      (idu_bfun3    ),
-    .i_rs1        (idu_rs1      ),
-    .i_rs2        (idu_rs2      ),
-    .i_imm        (idu_imm      ),
-    .i_ifupc      (ifu_pc       ),
-    .i_idupc      (idu_pc       ),
-    .i_wbu_intr   (wbu_intr     ),
-    .i_wbu_intrpc (wbu_intrpc   ),
-    .o_next_pc    (pre_pc       ),
-    .o_ifid_nop   (ifid_nop     )
+    .i_clk       (i_clk        ),
+    .i_rst_n     (i_rst_n      ),
+    .i_idu_valid (idu_valid    ),
+    .i_idu_rs1id (idu_rs1id    ),
+    .i_exu_rdid  (exu_rdid     ),
+    .i_jal       (idu_jal      ),
+    .i_jalr      (idu_jalr     ),
+    .i_brch      (idu_brch     ),
+    .i_bfun3     (idu_bfun3    ),
+    .i_rs1       (idu_rs1      ),
+    .i_rs2       (idu_rs2      ),
+    .i_imm       (idu_imm      ),
+    .i_ifupc     (ifu_pc       ),
+    .i_idupc     (idu_pc       ),
+    .i_iru_excp  (iru_excp     ),
+    .i_iru_intr  (iru_intr     ),
+    .i_iru_pc    (iru_pc       ),
+    .o_next_pc   (pre_pc       ),
+    .o_ifid_nop  (ifid_nop     )
   );
 
   // 3.difftest: ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -381,31 +419,32 @@ module core_top(
   reg [31:0]            cmt_inst  ;
   reg                   cmt_valid ;
   reg                   cmt_skip  ;
+  reg [`CPU_WIDTH-1:0]  cmt_intrNO;
   reg                   trap      ;
   reg [7:0]             trap_code ;
   reg [63:0]            cycleCnt  ;
   reg [63:0]            instrCnt  ;
   reg [`CPU_WIDTH-1:0]  regs_diff [`REG_COUNT-1:0];
 
-  wire real_cmt = !s_wbu_nop & wbu_commit;
+  wire real_cmt = !wbu_nop & wbu_commit;
   assign s_uart_out_valid = real_cmt & (cmt_inst == `CPU_WIDTH'h7b);
   assign s_uart_out_char = s_regs[10][7:0];
 
   wire csr_mcycle = real_cmt & (cmt_inst[6: 0] == `TYPE_SYS & cmt_inst[31:20] == `ADDR_MCYCLE);
-  wire cmt_skip = s_uart_out_valid | csr_mcycle;
+  wire cmt_skip = s_uart_out_valid | csr_mcycle | s_wbu_lsclint;
 
   always @(negedge i_clk or negedge i_rst_n) begin
     if (!i_rst_n) begin
-      {cmt_wen, cmt_wdest, cmt_wdata, cmt_pc, cmt_inst, cmt_valid, trap, trap_code, cycleCnt, instrCnt} <= 0;
+      {cmt_wen, cmt_wdest, cmt_wdata, cmt_pc, cmt_inst, cmt_valid, cmt_intrNO, trap, trap_code, cycleCnt, instrCnt} <= 0;
     end
     else if (~trap) begin
       cmt_wen   <= wbu_rdwen;
       cmt_wdest <= {3'd0, wbu_rdid};
       cmt_wdata <= wbu_rd   ;
-      cmt_pc    <= wbu_pc ;
-      cmt_inst  <= wbu_ins;
-      cmt_valid <= real_cmt ;
-
+      cmt_pc    <= wbu_pc   ;
+      cmt_inst  <= wbu_ins  ;
+      cmt_valid <= real_cmt ; 
+      cmt_intrNO<= (iru_intr & wbu_ready) ? s_mcause : 0; // 中断号，非0时产生中断。产生中断的时钟周期中，DifftestInstrCommit提交的valid需为0
       regs_diff <= s_regs   ;
 
       trap      <= (wbu_ins[6:0] == 7'h6b) ;
@@ -420,12 +459,12 @@ module core_top(
     .coreid             (0),
     .index              (0),
     .valid              (cmt_valid),
-    .pc                 (cmt_pc),
-    .instr              (cmt_inst),
-    .skip               (cmt_skip),
-    .isRVC              (0),
-    .scFailed           (0),
-    .wen                (cmt_wen),
+    .pc                 (cmt_pc   ),
+    .instr              (cmt_inst ),
+    .skip               (cmt_skip ),
+    .isRVC              (0        ),
+    .scFailed           (0        ),
+    .wen                (cmt_wen  ),
     .wdest              (cmt_wdest),
     .wdata              (cmt_wdata)
   );
@@ -492,23 +531,22 @@ module core_top(
     .mcause             (s_mcause),
     .scause             (0),
     .satp               (0),
-    .mip                (0),
-    .mie                (0),
+    .mip                (0), //(s_mip),
+    .mie                (s_mie),
     .mscratch           (0),
     .sscratch           (0),
     .mideleg            (0),
     .medeleg            (0)
   );
 
-  // for exception, not used for ecall :
-  // DifftestArchEvent DifftestArchEvent (
-  //   .clock         (i_clk),
-  //   .coreid        (0),
-  //   .intrNO        (0),            // 中断号，非0时产生中断。产生中断的时钟周期中，DifftestInstrCommit提交的valid需为0
-  //   .cause         (s_mcause ),		// 异常号，ecall时不需要考虑
-  //   .exceptionPC   (wbu_pc ),	  // 产生异常时的PC
-  //   .exceptionInst (wbu_ins)     // 产生异常时的指令
-  // );
+  DifftestArchEvent DifftestArchEvent (
+    .clock         (i_clk     ),
+    .coreid        (0         ),
+    .intrNO        (cmt_intrNO), // 中断号，非0时产生中断。产生中断的时钟周期中，DifftestInstrCommit提交的valid需为0
+    .cause         (0         ), // 异常号，ecall时不需要考虑
+    .exceptionPC   (cmt_pc    ), // 产生异常时的PC
+    .exceptionInst (cmt_inst  )  // 产生异常时的指令
+  );
 
   DifftestArchFpRegState DifftestArchFpRegState(
     .clock              (i_clk),
