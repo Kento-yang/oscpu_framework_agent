@@ -36,34 +36,41 @@ module csrfile (
   output logic [`CPU_WIDTH-1:0] s_mcause        ,
   output logic [`CPU_WIDTH-1:0] s_mcycle        ,
   output logic [`CPU_WIDTH-1:0] s_mie           ,
-  output logic [`CPU_WIDTH-1:0] s_mip
+  output logic [`CPU_WIDTH-1:0] s_mip           ,
+  output logic [`CPU_WIDTH-1:0] s_mscratch      ,
+  output logic [`CPU_WIDTH-1:0] s_sstatus
 );
 
   // 1. csr reg file: //////////////////////////////////////////////////////////////////
-  logic [`CPU_WIDTH-1:0] mepc   ; // Machine exception program counter
-  logic [`CPU_WIDTH-1:0] mtvec  ; // Machine trap-handler base address
-  logic [`CPU_WIDTH-1:0] mcause ; // Machine trap cause
-  logic [`CPU_WIDTH-1:0] mstatus; // Machine status register
-  logic [`CPU_WIDTH-1:0] mcycle ; // Machine cycle.
-  logic [`CPU_WIDTH-1:0] mie    ; // Machine interrupt eanble reg
-  logic [`CPU_WIDTH-1:0] mip    ; // Machine interrupt pending reg
+  logic [`CPU_WIDTH-1:0] mepc     ; // Machine exception program counter
+  logic [`CPU_WIDTH-1:0] mtvec    ; // Machine trap-handler base address
+  logic [`CPU_WIDTH-1:0] mcause   ; // Machine trap cause
+  logic [`CPU_WIDTH-1:0] mstatus  ; // Machine status register
+  logic [`CPU_WIDTH-1:0] mcycle   ; // Machine cycle.
+  logic [`CPU_WIDTH-1:0] mie      ; // Machine interrupt eanble reg
+  logic [`CPU_WIDTH-1:0] mip      ; // Machine interrupt pending reg
+  logic [`CPU_WIDTH-1:0] mscratch ; // Scratch register for machine trap handlers.
+  logic [`CPU_WIDTH-1:0] sstatus  ;
 
   // 2. read csr  reg file: ////////////////////////////////////////////////////////////
-  wire ren_mepc    = i_ren & (i_raddr == `ADDR_MEPC   );
-  wire ren_mtvec   = i_ren & (i_raddr == `ADDR_MTVEC  );
-  wire ren_mcause  = i_ren & (i_raddr == `ADDR_MCAUSE );
-  wire ren_mstatus = i_ren & (i_raddr == `ADDR_MSTATUS);
-  wire ren_mcycle  = i_ren & (i_raddr == `ADDR_MCYCLE );
-  wire ren_mie     = i_ren & (i_raddr == `ADDR_MIE    );
-  wire ren_mip     = i_ren & (i_raddr == `ADDR_MIP    );
+  wire ren_mepc     = i_ren & (i_raddr == `ADDR_MEPC     );
+  wire ren_mtvec    = i_ren & (i_raddr == `ADDR_MTVEC    );
+  wire ren_mcause   = i_ren & (i_raddr == `ADDR_MCAUSE   );
+  wire ren_mstatus  = i_ren & (i_raddr == `ADDR_MSTATUS  );
+  wire ren_mcycle   = i_ren & (i_raddr == `ADDR_MCYCLE   );
+  wire ren_mie      = i_ren & (i_raddr == `ADDR_MIE      );
+  wire ren_mip      = i_ren & (i_raddr == `ADDR_MIP      );
+  wire ren_mscratch = i_ren & (i_raddr == `ADDR_MSCRATCH );
 
-  assign o_rdata =  ren_mepc    ? mepc    : 
-                  ( ren_mtvec   ? mtvec   : 
-                  ( ren_mcause  ? mcause  : 
-                  ( ren_mstatus ? mstatus : 
-                  ( ren_mcycle  ? mcycle  : 
-                  ( ren_mie     ? mie     :
-                  ( ren_mip     ? mip     : `CPU_WIDTH'b0 ))))));
+  assign o_rdata =  ren_mepc     ? mepc     : 
+                  ( ren_mtvec    ? mtvec    : 
+                  ( ren_mcause   ? mcause   : 
+                  ( ren_mstatus  ? mstatus  : 
+                  ( ren_mcycle   ? mcycle   : 
+                  ( ren_mie      ? mie      :
+                //( ren_mip      ? mip      : 
+                  ( ren_mip      ? {mip[`CPU_WIDTH-1:`M_MIP_MTIP+1],1'b0,mip[`M_MIP_MTIP-1:0]} :   // to pass difftest.
+                  ( ren_mscratch ? mscratch : `CPU_WIDTH'b0 )))))));
 
   assign o_mtvec   = mtvec    ;
   assign o_mepc    = mepc     ;
@@ -119,7 +126,8 @@ module csrfile (
 
   // 3.4 mstatus: //////////////////////////////////////////////////////////////////////////
   wire wen_mstatus = (i_wen & (i_waddr == `ADDR_MSTATUS)) | i_mstatus_wen;
-  wire [`CPU_WIDTH-1:0] wdata_mstatus = i_mstatus_wen ? i_mstatus_wdata : i_wdata;
+  wire [`CPU_WIDTH-1:0] wdata_mstatus_no_sd = i_mstatus_wen ? i_mstatus_wdata : i_wdata;
+  wire [`CPU_WIDTH-1:0] wdata_mstatus = {(wdata_mstatus_no_sd[`M_STATUS_VS] || wdata_mstatus_no_sd[`M_STATUS_FS] || wdata_mstatus_no_sd[`M_STATUS_XS]),wdata_mstatus_no_sd[`CPU_WIDTH-2:0]};
 
   stl_reg #(
     .WIDTH    (`CPU_WIDTH   ),
@@ -130,6 +138,19 @@ module csrfile (
     .i_wen    (wen_mstatus  ),
     .i_din    (wdata_mstatus),
     .o_dout   (mstatus      )
+  );
+
+  wire [`CPU_WIDTH-1:0] wdata_sstatus = {wdata_mstatus[`M_STATUS_SD],48'b0,wdata_mstatus[`M_STATUS_FS],13'b0};
+
+  stl_reg #(
+    .WIDTH    (`CPU_WIDTH   ),
+    .RESET_VAL(`CPU_WIDTH'b0)
+  ) reg_sstatus (
+    .i_clk    (i_clk        ),
+    .i_rst_n  (i_rst_n      ),
+    .i_wen    (wen_mstatus  ),
+    .i_din    (wdata_sstatus),
+    .o_dout   (sstatus      )
   );
 
   // 3.5 mcycle: //////////////////////////////////////////////////////////////////////////
@@ -176,13 +197,30 @@ module csrfile (
     .o_dout   ({    mip[`CPU_WIDTH-1:`M_MIP_MTIP+1],     mip[`M_MIP_MTIP-1:0]})
   );
 
+  // 3.8 mscratch: //////////////////////////////////////////////////////////////////////////
+  wire wen_mscratch = (i_wen & (i_waddr == `ADDR_MSCRATCH));
+  wire [`CPU_WIDTH-1:0] wdata_mscratch = i_wdata;
+
+  stl_reg #(
+    .WIDTH    (`CPU_WIDTH     ),
+    .RESET_VAL(`CPU_WIDTH'b0  )
+  ) reg_mscratch (
+    .i_clk    (i_clk          ),
+    .i_rst_n  (i_rst_n        ),
+    .i_wen    (wen_mscratch   ),
+    .i_din    (wdata_mscratch ),
+    .o_dout   (mscratch       )
+  );
+
   // 4. use for difftest sim :///////////////////////////////////////////////////////////
-  assign s_mepc   = wen_mepc    ? wdata_mepc   : mepc    ;
-  assign s_mcause = wen_mcause  ? wdata_mcause : mcause  ;
-  assign s_mtvec  = wen_mtvec   ? wdata_mtvec  : mtvec   ;
-  assign s_mstatus= wen_mstatus ? wdata_mstatus: mstatus ;
-  assign s_mcycle = wdata_mcycle;
-  assign s_mie    = wen_mie     ? wdata_mie    : mie     ;
-  assign s_mip    = wen_mip     ? {i_wdata[`CPU_WIDTH-1:`M_MIP_MTIP+1],mip[`M_MIP_MTIP],i_wdata[`M_MIP_MTIP-1:0]} : mip ;
+  assign s_mepc     = wen_mepc     ? wdata_mepc     : mepc    ;
+  assign s_mcause   = wen_mcause   ? wdata_mcause   : mcause  ;
+  assign s_mtvec    = wen_mtvec    ? wdata_mtvec    : mtvec   ;
+  assign s_mstatus  = wen_mstatus  ? wdata_mstatus  : mstatus ;
+  assign s_sstatus  = wen_mstatus  ? wdata_sstatus  : sstatus ;
+  assign s_mcycle   = wdata_mcycle ;
+  assign s_mie      = wen_mie      ? wdata_mie      : mie     ;
+  assign s_mip      = wen_mip      ? {i_wdata[`CPU_WIDTH-1:`M_MIP_MTIP+1],mip[`M_MIP_MTIP],i_wdata[`M_MIP_MTIP-1:0]} : mip ;
+  assign s_mscratch = wen_mscratch ? wdata_mscratch : mscratch;
 
 endmodule

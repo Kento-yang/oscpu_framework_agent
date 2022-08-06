@@ -35,7 +35,7 @@ module core_top(
   // simulation signals:
   logic [2:0]             s_id_err ;
   logic [`CPU_WIDTH-1:0]  s_regs [`REG_COUNT-1:0];
-  logic [`CPU_WIDTH-1:0]  s_mtvec, s_mepc, s_mstatus, s_mcause, s_mcycle, s_mie, s_mip;
+  logic [`CPU_WIDTH-1:0]  s_mtvec, s_mepc, s_mstatus, s_mcause, s_mcycle, s_mie, s_mip, s_mscratch, s_sstatus;
   logic                   s_lsu_lsclint, s_wbu_lsclint;
 
   // 2.1 ifu ////////////////////////////////////////////////////////
@@ -384,7 +384,9 @@ module core_top(
     .s_mcause        (s_mcause       ),
     .s_mcycle        (s_mcycle       ),
     .s_mie           (s_mie          ),
-    .s_mip           (s_mip          )
+    .s_mip           (s_mip          ),
+    .s_mscratch      (s_mscratch     ),
+    .s_sstatus       (s_sstatus      )
   );
 
   // 2.7 bru ///////////////////////////////////////////////
@@ -517,23 +519,23 @@ module core_top(
   );
 
   DifftestCSRState DifftestCSRState(
-    .clock              (i_clk),
+    .clock              (i_clk      ),
     .coreid             (0),
     .priviledgeMode     (`RISCV_PRIV_MODE_M),
-    .mstatus            (s_mstatus),
-    .sstatus            (0),
-    .mepc               (s_mepc),
+    .mstatus            (s_mstatus  ),
+    .sstatus            (s_sstatus  ),
+    .mepc               (s_mepc     ),
     .sepc               (0),
     .mtval              (0),
     .stval              (0),
-    .mtvec              (s_mtvec),
+    .mtvec              (s_mtvec    ),
     .stvec              (0),
-    .mcause             (s_mcause),
+    .mcause             (s_mcause   ),
     .scause             (0),
     .satp               (0),
     .mip                (0), //(s_mip),
-    .mie                (s_mie),
-    .mscratch           (0),
+    .mie                (s_mie      ),
+    .mscratch           (s_mscratch ),
     .sscratch           (0),
     .mideleg            (0),
     .medeleg            (0)

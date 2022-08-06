@@ -42,7 +42,7 @@ module idu_system(
 
   assign o_csrdwen =  (csrrw | csrrwi) | (rsneq0 & (csrrs | csrrsi | csrrc | csrrci));
 
-  assign o_rdwen = o_csrsren;
+  assign o_rdwen = o_csrsren & (o_rdid!=0);
 
   assign o_excsropt = func3[1:0];   // please read the riscv-pri and riscv-spec manual, 00 for mret,ecall,ebreak... 01,10,11 for rw/rs/rc.
 

@@ -114,11 +114,18 @@
 `define ADDR_MCYCLE     `CSR_ADDRW'hb00
 `define ADDR_MIP        `CSR_ADDRW'h344
 `define ADDR_MIE        `CSR_ADDRW'h304
+`define ADDR_MSCRATCH   `CSR_ADDRW'h340
+
+
 
 // csr_file bit define:
 `define M_STATUS_MIE    3      // machine level interrupt enable.
 `define M_STATUS_MPIE   7      // machine level previous interrupt enable.
 `define M_STATUS_MPP    12:11  // machine level previous privilege mode
+`define M_STATUS_VS     10:9   // machine level previous privilege mode
+`define M_STATUS_FS     14:13  // machine level previous privilege mode
+`define M_STATUS_XS     16:15  // machine level previous privilege mode
+`define M_STATUS_SD     63
 
 `define M_MIE_MTIE      7      // machine interrupt enable, machine timer interrupt enable.
 `define M_MIP_MTIP      7      // machine interrupt pending, machine timer interrupt pending.
