@@ -28,7 +28,7 @@ module core_top(
   logic                   wbu_commit;             // wbu_valid & wbu_ready & !iru_intr.
   logic                   unif_trans_done, flush;
 
-  assign unif_trans_done = (UniIf_ifu_M.valid & UniIf_ifu_M.ready | !UniIf_ifu_M.valid) & (UniIf_lsu_M.valid & UniIf_lsu_M.ready | !UniIf_lsu_M.valid);
+  assign unif_trans_done = (UniIf_ifu_M.valid & UniIf_ifu_M.ready | !UniIf_ifu_M.valid);
   assign wbu_ready = (iru_excp | iru_intr) ? unif_trans_done: 1'b1;         // if excp/intr, waiting for unif done.
   assign flush     = (iru_excp | iru_intr) & (wbu_valid & wbu_ready);       // iru_intr not commit.
 
@@ -215,6 +215,8 @@ module core_top(
     .i_exu_pc      (exu_pc        ),
     .i_exu_ins     (exu_ins       ),
     .i_exu_nop     (exu_nop       ),
+    .i_iru_excp    (iru_excp      ),
+    .i_iru_intr    (iru_intr      ),
     .o_clint_ren   (clint_ren     ),
     .o_clint_raddr (clint_raddr   ),
     .i_clint_rdata (clint_rdata   ),

@@ -27,6 +27,10 @@ module lsu (
   input  logic  [`INS_WIDTH-1:0]  i_exu_ins     ,
   input  logic                    i_exu_nop     ,
 
+  // 4. iru signals:
+  input  logic                    i_iru_excp    ,
+  input  logic                    i_iru_intr    ,
+
   // 4. clint signals:
   output  logic                   o_clint_ren   ,
   output  logic [`CPU_WIDTH-1:0]  o_clint_raddr ,
@@ -120,7 +124,7 @@ module lsu (
 
   // 4. use interface to read/write, generate valid signals for post stage:////////////////////////////////////
 
-  assign UniIf_M.valid  = addr_axi & ldst_en;
+  assign UniIf_M.valid  = addr_axi & ldst_en & ~(i_iru_excp | i_iru_intr);
   assign UniIf_M.reqtyp = stor_en    ; 
   assign UniIf_M.addr   = exu_exres_r;
   assign UniIf_M.wdata  = exu_rs2_r  ;
