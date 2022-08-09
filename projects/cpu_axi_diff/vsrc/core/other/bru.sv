@@ -14,8 +14,7 @@ module bru (
   input     [`CPU_WIDTH-1:0]    i_imm       ,
   input     [`CPU_WIDTH-1:0]    i_ifupc     ,
   input     [`CPU_WIDTH-1:0]    i_idupc     ,
-  input                         i_iru_excp  ,
-  input                         i_iru_intr  ,
+  input                         i_iru_flush ,
   input     [`CPU_WIDTH-1:0]    i_iru_pc    ,
   output    [`CPU_WIDTH-1:0]    o_next_pc   ,
   output                        o_ifid_nop
@@ -63,7 +62,7 @@ module bru (
 
   assign seq_pc  = i_ifupc + 4;
   assign jump_pc = i_jalr ? (rs1 + i_imm) : (i_idupc + i_imm);  //means 1 for jalr , 0 for jal || bjump.
-  assign o_next_pc = (i_iru_excp | i_iru_intr) ? i_iru_pc : (jump ? jump_pc : seq_pc);
+  assign o_next_pc = i_iru_flush ? i_iru_pc : (jump ? jump_pc : seq_pc);
   assign o_ifid_nop = jump;
 
   // 3. update pc in ifu - pipe_pc_if, use next_pc to update pc.

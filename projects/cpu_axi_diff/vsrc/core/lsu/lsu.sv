@@ -4,7 +4,7 @@ module lsu (
   input  logic                    i_flush       ,
 
   // 1. axi interface to get data from mem:
-  uni_if.Master                   UniIf_M       ,
+  uni_if.Master                   dCacheIf_M    ,
 
   // 2. signal to pipe shake hands:
   input  logic                    i_pre_valid   ,   // from pre-stage
@@ -78,7 +78,7 @@ module lsu (
     .o_dout     (pre_valid_r )
   );
 
-  assign o_post_valid   = (ldst_en & addr_axi) ? UniIf_M.ready : pre_valid_r;
+  assign o_post_valid   = (ldst_en & addr_axi) ? dCacheIf_M.ready : pre_valid_r;
 
   logic  [`CPU_WIDTH-1:0]  exu_exres_r    ;
   logic  [`CPU_WIDTH-1:0]  exu_rs2_r      ;
@@ -124,20 +124,11 @@ module lsu (
 
   // 4. use interface to read/write, generate valid signals for post stage:////////////////////////////////////
 
-  assign UniIf_M.valid  = addr_axi & ldst_en & ~(i_iru_excp | i_iru_intr);
-  assign UniIf_M.reqtyp = stor_en    ; 
-  assign UniIf_M.addr   = exu_exres_r;
-  assign UniIf_M.wdata  = exu_rs2_r  ;
-
-  stl_mux_default #(7, 3, 2) mux_size (UniIf_M.size, exu_lsfunc3_r, 2'b00, {
-    `FUNC3_LB_SB, ldst_en ? 2'b00 : 2'b00, // load + store.
-    `FUNC3_LH_SH, ldst_en ? 2'b01 : 2'b00, // load + store.
-    `FUNC3_LW_SW, ldst_en ? 2'b10 : 2'b00, // load + store.
-    `FUNC3_LD_SD, ldst_en ? 2'b11 : 2'b00, // load + store.
-    `FUNC3_LBU  , load_en ? 2'b00 : 2'b00, // only load.
-    `FUNC3_LHU  , load_en ? 2'b01 : 2'b00, // only load.
-    `FUNC3_LWU  , load_en ? 2'b10 : 2'b00  // only load.
-  });
+  assign dCacheIf_M.valid  = addr_axi & ldst_en & ~(i_iru_excp | i_iru_intr);
+  assign dCacheIf_M.reqtyp = stor_en           ; 
+  assign dCacheIf_M.addr   = exu_exres_r       ;
+  assign dCacheIf_M.wdata  = exu_rs2_r         ;
+  assign dCacheIf_M.size   = exu_lsfunc3_r[1:0];
 
   // 3. use one register to save data, which is must keep for bypass ://///////////////////////////////////////
   // think about this situation: 
@@ -146,43 +137,27 @@ module lsu (
   // ins3 in idu, and the rs1id or rs2id == rdid(ins1).
   // so the ins1 load data in lsu must be kept, until pre stage is fire (div is done).  
 
-  logic [`CPU_WIDTH-1:0] unif_rdata,unif_rdata_r;
-  stl_mux_default #(7, 3, `CPU_WIDTH) mux_rdata (unif_rdata, exu_lsfunc3_r, `CPU_WIDTH'b0, {
-    `FUNC3_LB_SB, load_en ? {{56{UniIf_M.rdata[ 7]}}, UniIf_M.rdata[ 7:0]} : `CPU_WIDTH'b0 ,
-    `FUNC3_LH_SH, load_en ? {{48{UniIf_M.rdata[15]}}, UniIf_M.rdata[15:0]} : `CPU_WIDTH'b0 ,
-    `FUNC3_LW_SW, load_en ? {{32{UniIf_M.rdata[31]}}, UniIf_M.rdata[31:0]} : `CPU_WIDTH'b0 ,
-    `FUNC3_LD_SD, load_en ? UniIf_M.rdata                                  : `CPU_WIDTH'b0 ,
-    `FUNC3_LBU  , load_en ? {56'b0, UniIf_M.rdata[ 7:0]}                   : `CPU_WIDTH'b0 ,
-    `FUNC3_LHU  , load_en ? {48'b0, UniIf_M.rdata[15:0]}                   : `CPU_WIDTH'b0 ,
-    `FUNC3_LWU  , load_en ? {32'b0, UniIf_M.rdata[31:0]}                   : `CPU_WIDTH'b0 
+  logic [`CPU_WIDTH-1:0] dCache_rdata;
+
+  stl_mux_default #(7, 3, `CPU_WIDTH) mux_rdata (dCache_rdata, exu_lsfunc3_r, `CPU_WIDTH'b0, {
+    `FUNC3_LB_SB, load_en ? {{56{dCacheIf_M.rdata[ 7]}}, dCacheIf_M.rdata[ 7:0]} : `CPU_WIDTH'b0 ,
+    `FUNC3_LH_SH, load_en ? {{48{dCacheIf_M.rdata[15]}}, dCacheIf_M.rdata[15:0]} : `CPU_WIDTH'b0 ,
+    `FUNC3_LW_SW, load_en ? {{32{dCacheIf_M.rdata[31]}}, dCacheIf_M.rdata[31:0]} : `CPU_WIDTH'b0 ,
+    `FUNC3_LD_SD, load_en ? dCacheIf_M.rdata                                  : `CPU_WIDTH'b0 ,
+    `FUNC3_LBU  , load_en ? {56'b0, dCacheIf_M.rdata[ 7:0]}                   : `CPU_WIDTH'b0 ,
+    `FUNC3_LHU  , load_en ? {48'b0, dCacheIf_M.rdata[15:0]}                   : `CPU_WIDTH'b0 ,
+    `FUNC3_LWU  , load_en ? {32'b0, dCacheIf_M.rdata[31:0]}                   : `CPU_WIDTH'b0 
   });
-
-  wire UniIf_Sh = UniIf_M.valid & UniIf_M.ready;
-
-  stl_reg #(
-    .WIDTH      (`CPU_WIDTH   ),
-    .RESET_VAL  (`CPU_WIDTH'b0)
-  ) rdatareg (
-  	.i_clk      (i_clk        ),
-    .i_rst_n    (i_rst_n      ),
-    .i_wen      (UniIf_Sh     ),
-    .i_din      (unif_rdata   ),
-    .o_dout     (unif_rdata_r )
-  );
-
-  wire [`CPU_WIDTH-1:0] bus_rdata = UniIf_Sh ? unif_rdata : unif_rdata_r;
-
-  // remind: due to the ready signal of post stage never be 0, so it is not necessary to keep the handshake of UniIf_M.
 
   // 4. use pre stage signals to generate comb logic for post stage://////////////////////////////////////////
 
-  assign o_lsu_lsres   = addr_clint ? i_clint_rdata : bus_rdata;
+  assign o_lsu_lsres   = addr_clint ? i_clint_rdata : dCache_rdata;
   assign o_lsu_exres   = exu_exres_r  ;
   assign o_lsu_lden    = exu_lden_r   ;
   assign o_lsu_rdid    = exu_rdid_r   ;
-  assign o_lsu_rdwen   = exu_rdwen_r  ;
+  assign o_lsu_rdwen   = exu_rdwen_r   & pre_valid_r; // &pre_valid_r is used for bypass, to indicate o_lsu_lsres is valid.
   assign o_lsu_csrdid  = exu_csrdid_r ;
-  assign o_lsu_csrdwen = exu_csrdwen_r;
+  assign o_lsu_csrdwen = exu_csrdwen_r & pre_valid_r; // &pre_valid_r is used for bypass, to indicate o_lsu_lsres is valid.
   assign o_lsu_csrd    = exu_csrd_r   ;
   assign o_lsu_pc      = exu_pc_r     ;
   assign o_lsu_ins     = exu_ins_r    ;

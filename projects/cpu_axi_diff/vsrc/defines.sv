@@ -4,20 +4,23 @@
 `define RISCV_PRIV_MODE_S   1
 `define RISCV_PRIV_MODE_M   3
 
-// 2. for axi bus://////////////////////////////////////////////////////////////////////////////////////////
+// 2. for cache:////////////////////////////////////////////////////////////////////////////////////////////
 
-`define SIZE_B              2'b00
-`define SIZE_H              2'b01
-`define SIZE_W              2'b10
-`define SIZE_D              2'b11
+`define TAG_W          `ADR_WIDTH-11
+`define VLD_W           1
+`define DRT_W           1
+`define dTARY_W         `TAG_W+`VLD_W+`DRT_W // tag + valid + dirty.
+`define iTARY_W         `TAG_W+`VLD_W
 
-`define REQ_READ            1'b0
-`define REQ_WRITE           1'b1
+`define TAG_BIT        `TAG_W-1:0
+`define VLD_BIT        `TAG_W
+`define DRT_BIT        `TAG_W+`VLD_W
 
-// 3. for cpu core://////////////////////////////////////////////////////////////////////////////////////////
+// 3. for cpu core://///////////////////////////////////////////////////////////////////////////////////////
 
 // cpu width define:
 `define CPU_WIDTH 64
+`define ADR_WIDTH 32
 `define INS_WIDTH 32
 `define REG_COUNT (1<<`REG_ADDRW)
 `define REG_ADDRW 5
@@ -116,8 +119,6 @@
 `define ADDR_MIE        `CSR_ADDRW'h304
 `define ADDR_MSCRATCH   `CSR_ADDRW'h340
 
-
-
 // csr_file bit define:
 `define M_STATUS_MIE    3      // machine level interrupt enable.
 `define M_STATUS_MPIE   7      // machine level previous interrupt enable.
@@ -159,3 +160,53 @@
 // intr define:
 `define IRQ_TIMER       `CPU_WIDTH'h80000000_00000007
 `define IRQ_ECALL       `CPU_WIDTH'd11
+
+
+// 5. for axi bus://////////////////////////////////////////////////////////////////////////////////////////
+
+`define SIZE_B              2'b00
+`define SIZE_H              2'b01
+`define SIZE_W              2'b10
+`define SIZE_D              2'b11
+
+`define REQ_READ            1'b0
+`define REQ_WRITE           1'b1
+
+// AXI interface signals define://////////////////////////////////////////////////////////////
+// Burst types
+`define AXI_BURST_TYPE_FIXED                                2'b00
+`define AXI_BURST_TYPE_INCR                                 2'b01
+`define AXI_BURST_TYPE_WRAP                                 2'b10
+// Access permissions
+`define AXI_PROT_UNPRIVILEGED_ACCESS                        3'b000
+`define AXI_PROT_PRIVILEGED_ACCESS                          3'b001
+`define AXI_PROT_SECURE_ACCESS                              3'b000
+`define AXI_PROT_NON_SECURE_ACCESS                          3'b010
+`define AXI_PROT_DATA_ACCESS                                3'b000
+`define AXI_PROT_INSTRUCTION_ACCESS                         3'b100
+// Memory types (AR)
+`define AXI_ARCACHE_DEVICE_NON_BUFFERABLE                   4'b0000
+`define AXI_ARCACHE_DEVICE_BUFFERABLE                       4'b0001
+`define AXI_ARCACHE_NORMAL_NON_CACHEABLE_NON_BUFFERABLE     4'b0010
+`define AXI_ARCACHE_NORMAL_NON_CACHEABLE_BUFFERABLE         4'b0011
+`define AXI_ARCACHE_WRITE_THROUGH_NO_ALLOCATE               4'b1010
+`define AXI_ARCACHE_WRITE_THROUGH_READ_ALLOCATE             4'b1110
+`define AXI_ARCACHE_WRITE_THROUGH_WRITE_ALLOCATE            4'b1010
+`define AXI_ARCACHE_WRITE_THROUGH_READ_AND_WRITE_ALLOCATE   4'b1110
+`define AXI_ARCACHE_WRITE_BACK_NO_ALLOCATE                  4'b1011
+`define AXI_ARCACHE_WRITE_BACK_READ_ALLOCATE                4'b1111
+`define AXI_ARCACHE_WRITE_BACK_WRITE_ALLOCATE               4'b1011
+`define AXI_ARCACHE_WRITE_BACK_READ_AND_WRITE_ALLOCATE      4'b1111
+// Memory types (AW)
+`define AXI_AWCACHE_DEVICE_NON_BUFFERABLE                   4'b0000
+`define AXI_AWCACHE_DEVICE_BUFFERABLE                       4'b0001
+`define AXI_AWCACHE_NORMAL_NON_CACHEABLE_NON_BUFFERABLE     4'b0010
+`define AXI_AWCACHE_NORMAL_NON_CACHEABLE_BUFFERABLE         4'b0011
+`define AXI_AWCACHE_WRITE_THROUGH_NO_ALLOCATE               4'b0110
+`define AXI_AWCACHE_WRITE_THROUGH_READ_ALLOCATE             4'b0110
+`define AXI_AWCACHE_WRITE_THROUGH_WRITE_ALLOCATE            4'b1110
+`define AXI_AWCACHE_WRITE_THROUGH_READ_AND_WRITE_ALLOCATE   4'b1110
+`define AXI_AWCACHE_WRITE_BACK_NO_ALLOCATE                  4'b0111
+`define AXI_AWCACHE_WRITE_BACK_READ_ALLOCATE                4'b0111
+`define AXI_AWCACHE_WRITE_BACK_WRITE_ALLOCATE               4'b1111
+`define AXI_AWCACHE_WRITE_BACK_READ_AND_WRITE_ALLOCATE      4'b1111

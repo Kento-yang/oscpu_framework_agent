@@ -2,8 +2,8 @@
 module core_top(
   input                 i_clk       ,
   input                 i_rst_n     ,
-  uni_if.Master         UniIf_ifu_M ,
-  uni_if.Master         UniIf_lsu_M ,
+  uni_if.Master         iCacheIf_M  ,
+  uni_if.Master         dCacheIf_M  ,
   output                s_uart_out_valid,
   output [7:0]          s_uart_out_char
 );
@@ -28,7 +28,7 @@ module core_top(
   logic                   wbu_commit;             // wbu_valid & wbu_ready & !iru_intr.
   logic                   unif_trans_done, flush;
 
-  assign unif_trans_done = (UniIf_ifu_M.valid & UniIf_ifu_M.ready | !UniIf_ifu_M.valid);
+  assign unif_trans_done = (iCacheIf_M.valid & iCacheIf_M.ready | !iCacheIf_M.valid);
   assign wbu_ready = (iru_excp | iru_intr) ? unif_trans_done: 1'b1;         // if excp/intr, waiting for unif done.
   assign flush     = (iru_excp | iru_intr) & (wbu_valid & wbu_ready);       // iru_intr not commit.
 
@@ -43,7 +43,8 @@ module core_top(
   ifu u_ifu(
     .i_clk        (i_clk      ),
     .i_rst_n      (i_rst_n    ),
-    .UniIf_M      (UniIf_ifu_M),
+    .iCacheIf_M   (iCacheIf_M ),
+    .i_flush      (flush      ),
     .o_post_valid (ifu_valid  ),
     .i_post_ready (ifu_ready  ),
     .i_next_pc    (pre_pc     ),
@@ -197,7 +198,7 @@ module core_top(
     .i_clk         (i_clk         ),
     .i_rst_n       (i_rst_n       ),
     .i_flush       (flush         ),
-    .UniIf_M       (UniIf_lsu_M   ),
+    .dCacheIf_M    (dCacheIf_M    ),
     .i_pre_valid   (exu_valid     ),
     .o_pre_ready   (exu_ready     ),
     .o_post_valid  (lsu_valid     ),
@@ -408,8 +409,7 @@ module core_top(
     .i_imm       (idu_imm      ),
     .i_ifupc     (ifu_pc       ),
     .i_idupc     (idu_pc       ),
-    .i_iru_excp  (iru_excp     ),
-    .i_iru_intr  (iru_intr     ),
+    .i_iru_flush (flush        ),
     .i_iru_pc    (iru_pc       ),
     .o_next_pc   (pre_pc       ),
     .o_ifid_nop  (ifid_nop     )
