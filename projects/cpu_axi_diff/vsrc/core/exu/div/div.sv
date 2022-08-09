@@ -73,12 +73,14 @@ module div#(
     end
   end
 
-  logic [WIDTH:0] div_sub;
-  logic sub_positive;
+  logic [WIDTH-1:0] div_sub, mask;
+  logic sub_positive, sub_negative;
 
-  assign div_sub = {dividend_r >> cnt}[WIDTH:0] - {1'b0,divisor_r};
-  assign sub_positive = ~div_sub[WIDTH];
-  assign dividend = sub_positive ? (({{(WIDTH-1){1'b0}},div_sub} << cnt) | ((dividend_r << (2*WIDTH-cnt)) >> (2*WIDTH-cnt))): dividend_r;
+  assign {sub_negative,div_sub} = {dividend_r >> cnt}[WIDTH:0] - {1'b0,divisor_r};
+  assign sub_positive = ~sub_negative;
+
+  assign mask = ~({WIDTH{1'b1}} << cnt); // low bit mask.
+  assign dividend = sub_negative ? dividend_r : {{WIDTH{1'b0}}, {(div_sub<<cnt) | (dividend_r[WIDTH-1:0] & mask)}};
 
   for(genvar i=0; i<WIDTH; i++)begin
     assign quotient[i]  = (i == cnt) ? sub_positive : quotient_r[i];

@@ -5,7 +5,8 @@ if [ $2 = "clean" ]; then
 fi
 
 if [ $1 = "-b" ]; then
-    bash build.sh -e cpu_axi_diff -b -r "non-output/riscv-tests non-output/cpu-tests" -m "WITH_DRAMSIM3=1"
+    #bash build.sh -e cpu_axi_diff -b -r "non-output/riscv-tests non-output/cpu-tests" -m "WITH_DRAMSIM3=1"
+    bash build.sh -e cpu_axi_diff -b -r "non-output/riscv-tests non-output/cpu-tests-ysyx4" -m "WITH_DRAMSIM3=1"
 elif [ $1 = "hello" ]; then
     bash build.sh -e cpu_axi_diff -d -s -a "-i custom-output/hello/amtest-hello.bin --dump-wave -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -w -b
 elif [ $1 = "time" ]; then
@@ -22,7 +23,8 @@ elif [ $1 = "rt-thread" ]; then
     bash build.sh -e cpu_axi_diff -d -s -a "-i custom-output/rt-thread/rtthread.bin -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -w -b
 else
     #bash build.sh -e cpu_axi_diff -d -s -a "-i non-output/cpu-tests/$1-cpu-tests.bin --dump-wave -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -w -b
-    bash build.sh -e cpu_axi_diff -d -s -a "-i non-output/riscv-tests/$1-riscv-tests.bin --dump-wave -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -w -b
+    #bash build.sh -e cpu_axi_diff -d -s -a "-i non-output/riscv-tests/$1-riscv-tests.bin --dump-wave -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -w -b
+    bash build.sh -e cpu_axi_diff -d -s -a "-i non-output/cpu-tests-ysyx4/$1-cpu-tests.bin --dump-wave -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -w -b
 fi
 
 #use batch model: bash run.sh -b

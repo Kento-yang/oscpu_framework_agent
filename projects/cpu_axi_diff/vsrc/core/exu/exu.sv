@@ -72,7 +72,7 @@ module exu (
   logic pre_valid_r, div_end_valid, div_end_ready;
 
   wire pre_sh;
-  assign o_pre_ready =  alu_div ? (div_end_valid & div_end_ready): (o_post_valid & i_post_ready | !o_post_valid) ;
+  assign o_pre_ready =  (alu_div & pre_valid_r) ? (div_end_valid & div_end_ready): (o_post_valid & i_post_ready | !o_post_valid) ;
   assign pre_sh = i_pre_valid & o_pre_ready;
 
   stl_reg #(
