@@ -21,14 +21,16 @@ module div#(
   
   logic [CNT_W-1:0] cnt;
 
-  assign o_busy = (|cnt) | o_end_valid;
+  wire cntneq0 = |cnt;
+  
+  assign o_busy = (cntneq0) | o_end_valid;
 
   always@(posedge i_clk or negedge i_rst_n)begin
     if(!i_rst_n | i_flush)begin
       cnt <= {CNT_W{1'b0}};
     end else if(i_start) begin
       cnt <= i_divw ? {1'b0,{(CNT_W-1){1'b1}}} : {CNT_W{1'b1}}; // 31, 63.
-    end else if(|cnt) begin // cnt != 0
+    end else if(cntneq0) begin // cnt != 0
       cnt <= cnt - 1;
     end
   end
@@ -67,7 +69,7 @@ module div#(
       dividend_r  <= {{WIDTH{1'b0}}, i_dividend_abs};
       divisor_r   <= i_divisor_abs;
       quotient_r  <= {WIDTH{1'b0}};
-    end else if(|cnt) begin
+    end else if(cntneq0) begin
       dividend_r  <= dividend ;
       quotient_r  <= quotient ;
     end
@@ -87,7 +89,7 @@ module div#(
   end
 
   // 4. output:
-  assign o_quotient  = o_end_valid ? (~(dividend_positive^divisor_positive) ? quotient : ~quotient + 1'b1)  : {WIDTH{1'b0}};
-  assign o_remainder = o_end_valid ? (dividend_positive ? dividend[WIDTH-1:0] : ~dividend[WIDTH-1:0] + 1'b1): {WIDTH{1'b0}};
+  assign o_quotient  = cntneq0 ? {WIDTH{1'b0}} : (~(dividend_positive^divisor_positive) ? quotient : ~quotient + 1'b1)  ;
+  assign o_remainder = cntneq0 ? {WIDTH{1'b0}} : (dividend_positive ? dividend[WIDTH-1:0] : ~dividend[WIDTH-1:0] + 1'b1);
 
 endmodule
