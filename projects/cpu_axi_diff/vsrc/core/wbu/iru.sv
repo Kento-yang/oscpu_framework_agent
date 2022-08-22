@@ -1,6 +1,4 @@
 module iru (
-  input   logic                   i_clk         ,
-  input   logic                   i_rst_n       ,
   // wbu:
   input   logic                   i_wbu_valid   ,
   input   logic                   i_wbu_ready   ,
@@ -48,21 +46,21 @@ module iru (
 
   logic [`CPU_WIDTH-1:0] ecall_intr_mstatus_wdata;
   assign ecall_intr_mstatus_wdata[63:13]          = i_mstatus[63:13];
-  assign ecall_intr_mstatus_wdata[`M_STATUS_MPP]  = `M_MODE; 
+  assign ecall_intr_mstatus_wdata[`M_STATUS_MPP]  = `M_MODE;
   assign ecall_intr_mstatus_wdata[10:8]           = i_mstatus[10:8];
-  assign ecall_intr_mstatus_wdata[`M_STATUS_MPIE] = i_mstatus[`M_STATUS_MIE]; 
-  assign ecall_intr_mstatus_wdata[6:4]            = i_mstatus[6:4]; 
+  assign ecall_intr_mstatus_wdata[`M_STATUS_MPIE] = i_mstatus[`M_STATUS_MIE];
+  assign ecall_intr_mstatus_wdata[6:4]            = i_mstatus[6:4];
   assign ecall_intr_mstatus_wdata[`M_STATUS_MIE]  = 1'b0;
-  assign ecall_intr_mstatus_wdata[2:0]            = i_mstatus[2:0]; 
+  assign ecall_intr_mstatus_wdata[2:0]            = i_mstatus[2:0];
 
   logic [`CPU_WIDTH-1:0] mret_mstatus_wdata;
   assign mret_mstatus_wdata[63:13]          = i_mstatus[63:13];
-  assign mret_mstatus_wdata[`M_STATUS_MPP]  = 3'b0; 
+  assign mret_mstatus_wdata[`M_STATUS_MPP]  = 2'b0;
   assign mret_mstatus_wdata[10:8]           = i_mstatus[10:8];
-  assign mret_mstatus_wdata[`M_STATUS_MPIE] = 1'b1; 
-  assign mret_mstatus_wdata[6:4]            = i_mstatus[6:4]; 
+  assign mret_mstatus_wdata[`M_STATUS_MPIE] = 1'b1;
+  assign mret_mstatus_wdata[6:4]            = i_mstatus[6:4];
   assign mret_mstatus_wdata[`M_STATUS_MIE]  = i_mstatus[`M_STATUS_MPIE];
-  assign mret_mstatus_wdata[2:0]            = i_mstatus[2:0]; 
+  assign mret_mstatus_wdata[2:0]            = i_mstatus[2:0];
 
   assign o_mstatus_wdata =  o_iru_intr | ecall  ? ecall_intr_mstatus_wdata :
                             (  mret    ? mret_mstatus_wdata  : `CPU_WIDTH'b0);

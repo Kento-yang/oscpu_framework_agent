@@ -33,10 +33,10 @@ module lsu (
 
   // 4. clint signals:
   output  logic                   o_clint_ren   ,
-  output  logic [`CPU_WIDTH-1:0]  o_clint_raddr ,
+  output  logic [`ADR_WIDTH-1:0]  o_clint_raddr ,
   input   logic [`CPU_WIDTH-1:0]  i_clint_rdata ,
   output  logic                   o_clint_wen   ,
-  output  logic [`CPU_WIDTH-1:0]  o_clint_waddr ,
+  output  logic [`ADR_WIDTH-1:0]  o_clint_waddr ,
   output  logic [`CPU_WIDTH-1:0]  o_clint_wdata ,
 
   // 5. output comb signal to post stage:
@@ -62,7 +62,7 @@ module lsu (
   //                 |REG|
   // o_pre_ready <-- ⌊____⌋ <-- i_post_ready
 
-  assign o_pre_ready =  (ldst_en & addr_axi) ? (o_post_valid & i_post_ready) : (o_post_valid & i_post_ready | !o_post_valid) ;
+  assign o_pre_ready =  (ldst_en & en_axi) ? (o_post_valid & i_post_ready) : (o_post_valid & i_post_ready | !o_post_valid) ;
 
   wire pre_sh = i_pre_valid & o_pre_ready;
   wire pre_valid_r;
@@ -78,7 +78,7 @@ module lsu (
     .o_dout     (pre_valid_r )
   );
 
-  assign o_post_valid   = (ldst_en & addr_axi) ? dCacheIf_M.ready : pre_valid_r;
+  assign o_post_valid   = (ldst_en & en_axi) ? dCacheIf_M.ready : pre_valid_r;
 
   logic  [`CPU_WIDTH-1:0]  exu_exres_r    ;
   logic  [`CPU_WIDTH-1:0]  exu_rs2_r      ;
@@ -106,27 +106,30 @@ module lsu (
   );
 
   // 2. deal with device :///////////////////////////////////////////////////////////////////////////////////////
-  wire load_en = pre_valid_r & exu_lden_r;
-  wire stor_en = pre_valid_r & exu_sten_r;
-  wire ldst_en = load_en | stor_en ;
+  wire load_en  = pre_valid_r & exu_lden_r;
+  wire stor_en  = pre_valid_r & exu_sten_r;
+  wire ldst_en  = load_en | stor_en ;
 
-  wire addr_clint = (exu_exres_r >= `CLINT_BASE_ADDR) & (exu_exres_r < `CLINT_END_ADDR);
-  wire addr_axi   = !addr_clint;
+  wire [`ADR_WIDTH-1:0] lsu_addr = exu_exres_r[`ADR_WIDTH-1:0];
+
+  // `CLINT_BASE_ADDR == 32'h02000000, `CLINT_END_ADDR == 32'h0200ffff
+  wire en_clint = (lsu_addr & {{(`ADR_WIDTH-16){1'b1}},16'b0}) == `CLINT_BASE_ADDR;
+  wire en_axi   = !en_clint;
 
   // 3. deal with clint :///////////////////////////////////////////////////////////////////////////////////////
 
-  assign o_clint_ren    = addr_clint & load_en;
-  assign o_clint_raddr  = exu_exres_r;
+  assign o_clint_ren    = en_clint & load_en;
+  assign o_clint_raddr  = lsu_addr  ;
 
-  assign o_clint_wen    = addr_clint & stor_en;
-  assign o_clint_waddr  = exu_exres_r;
-  assign o_clint_wdata  = exu_rs2_r  ;
+  assign o_clint_wen    = en_clint & stor_en;
+  assign o_clint_waddr  = lsu_addr  ;
+  assign o_clint_wdata  = exu_rs2_r ;
 
   // 4. use interface to read/write, generate valid signals for post stage:////////////////////////////////////
 
-  assign dCacheIf_M.valid  = addr_axi & ldst_en & ~(i_iru_excp | i_iru_intr);
+  assign dCacheIf_M.valid  = en_axi & ldst_en & ~(i_iru_excp | i_iru_intr);
   assign dCacheIf_M.reqtyp = stor_en           ; 
-  assign dCacheIf_M.addr   = exu_exres_r       ;
+  assign dCacheIf_M.addr   = lsu_addr          ;
   assign dCacheIf_M.wdata  = exu_rs2_r         ;
   assign dCacheIf_M.size   = exu_lsfunc3_r[1:0];
 
@@ -166,7 +169,7 @@ module lsu (
 
   // 4. use pre stage signals to generate comb logic for post stage://////////////////////////////////////////
 
-  assign o_lsu_lsres   = addr_clint ? i_clint_rdata : dCache_rdata;
+  assign o_lsu_lsres   = en_clint ? i_clint_rdata : dCache_rdata;
   assign o_lsu_exres   = exu_exres_r  ;
   assign o_lsu_lden    = exu_lden_r   ;
   assign o_lsu_rdid    = exu_rdid_r   ;
@@ -177,6 +180,6 @@ module lsu (
   assign o_lsu_pc      = exu_pc_r     ;
   assign o_lsu_ins     = exu_ins_r    ;
   assign o_lsu_nop     = exu_nop_r    ;
-  assign s_lsu_lsclint = ldst_en & addr_clint;
+  assign s_lsu_lsclint = ldst_en & en_clint;
 
 endmodule

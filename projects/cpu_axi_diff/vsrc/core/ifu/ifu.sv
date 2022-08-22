@@ -43,11 +43,11 @@ module ifu (
   // |REG|              |UNIF|          | 
   // ⌊____⌋    --> valid ⌊____⌋           | <-- i_post_ready
 
-  assign iCacheIf_M.valid  = 1'b1             ;
-  assign iCacheIf_M.addr   = next_pc_r        ;
-  assign iCacheIf_M.reqtyp = `REQ_READ        ;
-  assign iCacheIf_M.wdata  = `CPU_WIDTH'b0    ;   // no use.
-  assign iCacheIf_M.size   = 2'b10            ;   // 32 bit.
+  assign iCacheIf_M.valid  = 1'b1         ;
+  assign iCacheIf_M.size   = 2'b10        ; // 32 bit.
+  assign iCacheIf_M.reqtyp = `REQ_READ    ;
+  assign iCacheIf_M.wdata  = `INS_WIDTH'b0; // no use.
+  assign iCacheIf_M.addr   = next_pc_r[`ADR_WIDTH-1:0];
 
   // 3. use pre stage signals to generate comb logic for post stage://////////////////////////////////////////
 

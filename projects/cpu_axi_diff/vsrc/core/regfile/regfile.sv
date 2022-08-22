@@ -29,8 +29,7 @@ module regfile (
       stl_reg #(
         .WIDTH     (`CPU_WIDTH   ),
         .RESET_VAL (`CPU_WIDTH'b0)
-      )
-      u_stl_reg(
+      ) u_stl_reg (
         .i_clk   (i_clk   ),
         .i_rst_n (i_rst_n ),
         .i_wen   (rfwen[i]),

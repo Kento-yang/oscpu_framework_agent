@@ -175,7 +175,7 @@ module dCache (
   // input:  valid, addr, reqtyp, wdata, size;
   // output: ready, rdata;
   assign dCacheIf_S.ready = (ich_state == HIT);
-  assign dCacheIf_S.rdata = hit_cacheline >> {offset,3'b0};
+  assign dCacheIf_S.rdata = {hit_cacheline >> {offset,3'b0}}[`CPU_WIDTH-1:0];
 
   // 5. miss, write dirty cacheline to bus, read new cacheline from bus : ///////////////////////////////////////////////////
   logic                 tary_miss_wen   [1:0];

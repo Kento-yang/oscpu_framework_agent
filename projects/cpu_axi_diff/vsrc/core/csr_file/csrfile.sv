@@ -127,7 +127,7 @@ module csrfile (
   // 3.4 mstatus: //////////////////////////////////////////////////////////////////////////
   wire wen_mstatus = (i_wen & (i_waddr == `ADDR_MSTATUS)) | i_mstatus_wen;
   wire [`CPU_WIDTH-1:0] wdata_mstatus_no_sd = i_mstatus_wen ? i_mstatus_wdata : i_wdata;
-  wire [`CPU_WIDTH-1:0] wdata_mstatus = {(wdata_mstatus_no_sd[`M_STATUS_VS] || wdata_mstatus_no_sd[`M_STATUS_FS] || wdata_mstatus_no_sd[`M_STATUS_XS]),wdata_mstatus_no_sd[`CPU_WIDTH-2:0]};
+  wire [`CPU_WIDTH-1:0] wdata_mstatus = {(|wdata_mstatus_no_sd[`M_STATUS_VS]) | (|wdata_mstatus_no_sd[`M_STATUS_FS]) | (|wdata_mstatus_no_sd[`M_STATUS_XS]), wdata_mstatus_no_sd[`CPU_WIDTH-2:0]};
 
   stl_reg #(
     .WIDTH    (`CPU_WIDTH   ),

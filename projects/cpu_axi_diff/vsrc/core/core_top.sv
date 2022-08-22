@@ -13,8 +13,9 @@ module core_top(
   logic [`INS_WIDTH-1:0]  ifu_ins, idu_ins, exu_ins, lsu_ins, wbu_ins;
   logic                            idu_nop, exu_nop, lsu_nop, wbu_nop;
 
-  logic                   clint_ren  , clint_wen  , clint_mtip ;
-  logic [`CPU_WIDTH-1:0]  clint_raddr, clint_waddr, clint_rdata, clint_wdata;
+  logic                   clint_ren  , clint_wen  , clint_mtip;
+  logic [`ADR_WIDTH-1:0]  clint_raddr, clint_waddr;
+  logic [`CPU_WIDTH-1:0]  clint_rdata, clint_wdata;
 
   logic                   ifid_nop;               // for branch adventure
   logic                   ifid_stall, idex_nop;   // for data adventure
@@ -294,8 +295,6 @@ module core_top(
   logic [`CPU_WIDTH-1:0]  mstatus_wdata ;
 
   iru u_iru(
-    .i_clk           (i_clk           ),
-    .i_rst_n         (i_rst_n         ),
     .i_wbu_valid     (wbu_valid       ),
     .i_wbu_ready     (wbu_ready       ),
     .i_wbu_nop       (wbu_nop         ),
@@ -459,6 +458,7 @@ module core_top(
     end
   end
 
+  // verilator lint_off PINMISSING
   DifftestInstrCommit DifftestInstrCommit(
     .clock              (i_clk),
     .coreid             (0),
@@ -473,6 +473,7 @@ module core_top(
     .wdest              (cmt_wdest),
     .wdata              (cmt_wdata)
   );
+  // verilator lint_on PINMISSING
 
   DifftestArchIntRegState DifftestArchIntRegState (
     .clock              (i_clk),

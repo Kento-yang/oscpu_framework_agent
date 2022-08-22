@@ -109,7 +109,6 @@ module exu (
   logic  [`CSR_ADDRW-1:0]      idu_csrdid , idu_csrdid_r  ;
   logic                        idu_csrdwen, idu_csrdwen_r ;
   logic  [`CPU_WIDTH-1:0]      idu_pc     , idu_pc_r      ;
-  logic  [`CPU_WIDTH-1:0]      idu_diffpc , idu_diffpc_r  ;
   logic  [`INS_WIDTH-1:0]      idu_ins    , idu_ins_r     ;
   logic                        idu_nop    , idu_nop_r     ;
 

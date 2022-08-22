@@ -5,10 +5,10 @@ module clint (
 
   // from cpu lsu:
   input  logic                  i_clint_ren   ,
-  input  logic [`CPU_WIDTH-1:0] i_clint_raddr ,
+  input  logic [`ADR_WIDTH-1:0] i_clint_raddr ,
   output logic [`CPU_WIDTH-1:0] o_clint_rdata ,
   input  logic                  i_clint_wen   ,
-  input  logic [`CPU_WIDTH-1:0] i_clint_waddr ,
+  input  logic [`ADR_WIDTH-1:0] i_clint_waddr ,
   input  logic [`CPU_WIDTH-1:0] i_clint_wdata ,
   
   // to csr_file:
