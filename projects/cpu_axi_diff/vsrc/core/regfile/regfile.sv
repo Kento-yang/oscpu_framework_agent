@@ -1,6 +1,7 @@
 `include "defines.sv"
 module regfile (
   input                         i_clk   ,
+  input                         i_rst_n ,
 
   // from wbu:
   input                         i_wen   ,
@@ -18,16 +19,24 @@ module regfile (
 );
 
   logic [`CPU_WIDTH-1:0] rf [`REG_COUNT-1:0];
+  logic [`REG_COUNT-1:1] rfwen;
 
-  assign rf[0] = `CPU_WIDTH'b0; // x[0] must be inital, and it can never be written.
+  assign rf[0] = `CPU_WIDTH'b0; // x[0] connect to GND.
 
   generate                      // x[1]-x[31]:
     for(genvar i=1; i<`REG_COUNT; i=i+1 )begin: regfile
-      always @(posedge i_clk) begin
-        if (i_wen && i_waddr == i) begin
-          rf[i] <= i_wdata;
-        end
-      end
+      assign rfwen[i] = i_wen && i_waddr == i;
+      stl_reg #(
+        .WIDTH     (`CPU_WIDTH   ),
+        .RESET_VAL (`CPU_WIDTH'b0)
+      )
+      u_stl_reg(
+        .i_clk   (i_clk   ),
+        .i_rst_n (i_rst_n ),
+        .i_wen   (rfwen[i]),
+        .i_din   (i_wdata ),
+        .o_dout  (rf[i]   )
+      );
     end
   endgenerate
 

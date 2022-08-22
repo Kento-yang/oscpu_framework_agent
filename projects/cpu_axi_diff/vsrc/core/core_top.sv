@@ -332,6 +332,7 @@ module core_top(
   // 2.6 bypass, regfile read/write. ///////////////////////
   bypass u_bypass(
     .i_clk        (i_clk        ),
+    .i_rst_n      (i_rst_n      ),
     // generate rs1,rs2:
     .i_idu_rs1id  (idu_rs1id    ),
     .i_idu_rs2id  (idu_rs2id    ),

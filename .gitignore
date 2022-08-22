@@ -16,6 +16,7 @@
 !*.elf
 !*.txt
 !*.sc
+!*.f
 !Makefile
 !README
 !README.md

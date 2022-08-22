@@ -1,6 +1,7 @@
 `include "defines.sv"
 module bypass (
   input                            i_clk         ,
+  input                            i_rst_n       ,
 
   // 1. from exu/lsu/wbu to generate rs1/rs2 for idu:
   // from idu:
@@ -46,6 +47,7 @@ module bypass (
 
   regfile u_regfile(
     .i_clk    (i_clk        ),
+    .i_rst_n  (i_rst_n      ),
     .i_wen    (i_wbu_rdwen  ),
     .i_waddr  (i_wbu_rdid   ),
     .i_wdata  (i_wbu_rd     ),
