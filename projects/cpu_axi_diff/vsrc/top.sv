@@ -3,9 +3,9 @@ module top(
   input  logic                      i_clk           ,
   input  logic                      i_rst_n         ,
   // aw:
-  input  logic                      i_axi_aw_ready  ,         
+  input  logic                      i_axi_aw_ready  ,
   output logic                      o_axi_aw_valid  ,
-  output logic [`CPU_WIDTH-1:0]     o_axi_aw_addr   ,
+  output logic [`ADR_WIDTH-1:0]     o_axi_aw_addr   ,
   output logic [2:0]                o_axi_aw_prot   ,
   output logic [3:0]                o_axi_aw_id     ,
   output logic                      o_axi_aw_user   ,
@@ -17,22 +17,22 @@ module top(
   output logic [3:0]                o_axi_aw_qos    ,
   output logic [3:0]                o_axi_aw_region ,
   // w:
-  input  logic                      i_axi_w_ready   ,                
+  input  logic                      i_axi_w_ready   ,
   output logic                      o_axi_w_valid   ,
   output logic [`CPU_WIDTH-1:0]     o_axi_w_data    ,
   output logic [`CPU_WIDTH/8-1:0]   o_axi_w_strb    ,
   output logic                      o_axi_w_last    ,
   output logic                      o_axi_w_user    ,
   // b:
-  output logic                      o_axi_b_ready   ,                
+  output logic                      o_axi_b_ready   ,
   input  logic                      i_axi_b_valid   ,
-  input  logic [1:0]                i_axi_b_resp    ,                 
+  input  logic [1:0]                i_axi_b_resp    ,
   input  logic [3:0]                i_axi_b_id      ,
   input  logic                      i_axi_b_user    ,
   // ar:
-  input  logic                      i_axi_ar_ready  ,                
+  input  logic                      i_axi_ar_ready  ,
   output logic                      o_axi_ar_valid  ,
-  output logic [`CPU_WIDTH-1:0]     o_axi_ar_addr   ,
+  output logic [`ADR_WIDTH-1:0]     o_axi_ar_addr   ,
   output logic [2:0]                o_axi_ar_prot   ,
   output logic [3:0]                o_axi_ar_id     ,
   output logic                      o_axi_ar_user   ,
@@ -44,8 +44,8 @@ module top(
   output logic [3:0]                o_axi_ar_qos    ,
   output logic [3:0]                o_axi_ar_region ,
   // r:
-  output logic                      o_axi_r_ready   ,                 
-  input  logic                      i_axi_r_valid   ,                
+  output logic                      o_axi_r_ready   ,
+  input  logic                      i_axi_r_valid   ,
   input  logic [1:0]                i_axi_r_resp    ,
   input  logic [`CPU_WIDTH-1:0]     i_axi_r_data    ,
   input  logic                      i_axi_r_last    ,
@@ -54,6 +54,7 @@ module top(
   output logic                      s_uart_out_valid,
   output logic [7:0]                s_uart_out_char
 );
+
   // 1.rst : ////////////////////////////////////////////////////////
   logic rst_n_sync;
   stl_rst u_stl_rst(

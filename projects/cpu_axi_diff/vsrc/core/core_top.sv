@@ -431,7 +431,7 @@ module core_top(
   reg [`CPU_WIDTH-1:0]  regs_diff [`REG_COUNT-1:0];
 
   wire real_cmt = !wbu_nop & wbu_commit;
-  assign s_uart_out_valid = real_cmt & (cmt_inst == `CPU_WIDTH'h7b);
+  assign s_uart_out_valid = real_cmt & (cmt_inst == `INS_WIDTH'h7b);
   assign s_uart_out_char = s_regs[10][7:0];
 
   wire csr_mcycle = real_cmt & (cmt_inst[6: 0] == `TYPE_SYS & cmt_inst[31:20] == `ADDR_MCYCLE);
@@ -452,9 +452,9 @@ module core_top(
       regs_diff <= s_regs   ;
 
       trap      <= (wbu_ins[6:0] == 7'h6b) ;
-      trap_code <= s_regs[10][7:0]           ;
-      cycleCnt  <= cycleCnt + 1              ;
-      instrCnt  <= instrCnt + wbu_commit     ;
+      trap_code <= s_regs[10][7:0]         ;
+      cycleCnt  <= cycleCnt + 1            ;
+      instrCnt  <= instrCnt + {63'b0,wbu_commit};
     end
   end
 
