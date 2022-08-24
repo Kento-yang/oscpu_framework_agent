@@ -2,7 +2,7 @@
 module uni2axi # (
     parameter UNI_ADDR_WIDTH    = 32,                   // addr width for uni if
     parameter UNI_DATA_WIDTH    = 128,                  // data width for uni if
-    parameter AXI_ADDR_WIDTH    = 64,                   // addr width for axi if
+    parameter AXI_ADDR_WIDTH    = 32,                   // addr width for axi if
     parameter AXI_DATA_WIDTH    = 64,                   // data width for axi if
     parameter AXI_STRB_WIDTH    = AXI_DATA_WIDTH/8,     // strb width for axi if
     parameter AXI_ID_WIDTH      = 4,
@@ -13,7 +13,6 @@ module uni2axi # (
   uni_if.Slave                        UniIf_S ,
   axi4_if.Master                      AxiIf_M
 );
-
   wire w_trans    = UniIf_S.reqtyp == `REQ_WRITE;
   wire r_trans    = UniIf_S.reqtyp == `REQ_READ ;
   wire w_valid    = UniIf_S.valid & w_trans;
@@ -46,10 +45,10 @@ module uni2axi # (
       else begin
           if (w_valid) begin
               case (w_state)
-                  W_STATE_IDLE:                                 w_state <= W_STATE_ADDR;
-                  W_STATE_ADDR:  if (aw_hs)                     w_state <= W_STATE_WRITE;
-                  W_STATE_WRITE: if (w_done & AxiIf_M.w_last)   w_state <= W_STATE_RESP;
-                  W_STATE_RESP:  if (b_hs)                      w_state <= W_STATE_IDLE;
+                  W_STATE_IDLE:               w_state <= W_STATE_ADDR;
+                  W_STATE_ADDR:  if (aw_hs)   w_state <= W_STATE_WRITE;
+                  W_STATE_WRITE: if (w_done)  w_state <= W_STATE_RESP;
+                  W_STATE_RESP:  if (b_hs)    w_state <= W_STATE_IDLE;
               endcase
           end
       end
@@ -85,11 +84,10 @@ module uni2axi # (
   end
 
   // ------------------Process Data------------------
-  parameter AXI_SIZE      = $clog2(AXI_STRB_WIDTH);           // 3
   parameter TRANS_LEN     = UNI_DATA_WIDTH / AXI_DATA_WIDTH;  // 2
 
-  wire [2:0]                axi_size = AXI_SIZE[2:0];
-  wire [7:0]                axi_len  = TRANS_LEN - 1;
+  wire [2:0]                axi_size = {1'b0,UniIf_S.size};
+  wire [7:0]                axi_len  = UniIf_S.cachable ? (TRANS_LEN - 1) : 0;
   wire [AXI_ADDR_WIDTH-1:0] axi_addr = {{(AXI_ADDR_WIDTH-UNI_ADDR_WIDTH){1'b0}},UniIf_S.addr};
 
   wire [AXI_ID_WIDTH-1:0]   axi_id   = {AXI_ID_WIDTH{1'b0}};

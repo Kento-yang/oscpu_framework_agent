@@ -6,162 +6,51 @@ module iCache (
   uni_if.Master               iMemIf_M     // 128 bit width
 );
 
-  //1. iCache : ////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*    device                    address
+      reserve             0x0000_0000~0x01ff_ffff
+       CLINT              0x0200_0000~0x0200_ffff
+      reserve             0x0201_0000~0x0fff_ffff
+     UART16550            0x1000_0000~0x1000_0fff
+    SPI controller        0x1000_1000~0x1000_1fff
+      reserve             0x1000_2000~0x2fff_ffff
+  SPI-flash XIP mode      0x3000_0000~0x3fff_ffff
+    ChipLink MMIO         0x4000_0000~0x7fff_ffff
+       memory             0x8000_0000~0xffff_ffff
+*/
 
-  //          |<------16 bytes---->|                |<------16 bytes---->|
-  //   ⌈‾‾‾‾‾⌉ ⌈‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾⌉         ⌈‾‾‾‾‾⌉ ⌈‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾⌉ ——
-  //   |    | |                    |        |     | |                   |  ↑
-  //   |    | |                    |        |     | |                   |  |
-  //   |    | |                    |        |     | |                   |  |
-  //   |    | |                    |        |     | |                   |  |
-  //   |Tag0| |    Cacheline0      |        |Tag1 | |    Cacheline1     |  |128 sets.
-  //   |    | |                    |        |     | |                   |  |
-  //   |    | |                    |        |     | |                   |  |
-  //   |    | |                    |        |     | |                   |  |
-  //   |    | |                    |        |     | |                   |  ↓
-  //   ⌊_____⌋ ⌊____________________⌋         ⌊_____⌋ ⌊____________________⌋ ——
+  // in this module, choose cachable memory, or uncachable device.
+  // only cachable interface can read iCache, otherwise iCacheIf_S connect iMemIf_M directly.
 
+  wire cachable = iCacheIf_S.addr[31];
 
-  // tag array signal:
-  logic                  tary_wen   [1:0];
-  logic [`iTARY_W-1:0]   tary_wdata [1:0];
-  logic [`iTARY_W-1:0]   tary_rdata [1:0];
+  uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(`INS_WIDTH)) iCachableCacheIf();
+  uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(128)) iCachableMemIf();
 
-  // data array signal:
-  logic                  dary_ren   [1:0];
-  logic                  dary_wen   [1:0];
-  logic [15:0]           dary_wstrb [1:0];
-  logic [127:0]          dary_wdata [1:0];
-  logic [127:0]          dary_rdata [1:0];
+  assign iCachableCacheIf.valid    = iCacheIf_S.valid & cachable;
+  assign iCachableCacheIf.reqtyp   = iCacheIf_S.reqtyp   ;
+  assign iCachableCacheIf.addr     = iCacheIf_S.addr     ;
+  assign iCachableCacheIf.wdata    = iCacheIf_S.wdata    ;
+  assign iCachableCacheIf.size     = iCacheIf_S.size     ;
 
-  for (genvar i=0; i<2 ; i=i+1) begin
-    tag_ary #(
-      .DATA_WIDTH (`iTARY_W)
-    ) u_tag_ary(
-      .i_clk   (i_clk         ),
-      .i_rst_n (i_rst_n       ),
-      .i_wen   (tary_wen  [i] ),
-      .i_addr  (index         ),
-      .i_din   (tary_wdata[i] ),
-      .o_dout  (tary_rdata[i] )
-    );
-    data_ary u_data_ary(
-      .i_clk   (i_clk         ),
-      .i_rst_n (i_rst_n       ),
-      .i_ren   (dary_ren  [i] ),
-      .i_wen   (dary_wen  [i] ),
-      .i_wstrb (dary_wstrb[i] ),
-      .i_addr  (index         ),
-      .i_wdata (dary_wdata[i] ),
-      .o_rdata (dary_rdata[i] )
-    );
-  end
+  assign iCachableMemIf.ready      = iMemIf_M.ready & cachable;
+  assign iCachableMemIf.rdata      = iMemIf_M.rdata;
 
-  logic [127:0] recent;
-  logic recent_wen, recent_wdata;
-
-  for (genvar i=0; i<128 ; i=i+1) begin
-    stl_reg #(
-      .WIDTH      (1           ),
-      .RESET_VAL  (1'b0        )
-    ) reg_recent (
-      .i_clk      (i_clk       ),
-      .i_rst_n    (i_rst_n     ),
-      .i_wen      (recent_wen & (index == i)),
-      .i_din      (recent_wdata),
-      .o_dout     (recent[i]   )
-    );
-  end
-
-  // 2. control signals: ///////////////////////////////////////////////////////////////////////////////////////////////////
-  wire [`TAG_BIT] tag    = iCacheIf_S.addr[`ADR_WIDTH-1:11];
-  wire [6:0]      index  = iCacheIf_S.addr[ 10:4];
-  wire [3:0]      offset = iCacheIf_S.addr[  3:0];
-
-  wire [1:0] hit;
-  for (genvar i=0; i<2 ; i=i+1) begin
-    assign hit[i] = (tary_rdata[i][`TAG_BIT] == tag) & tary_rdata[i][`VLD_BIT];
-  end
-
-  wire victim_blkid = ~recent[index];
-  
-  // 3. state machine: /////////////////////////////////////////////////////////////////////////////////////////////////////
-
-  enum logic[1:0] {IDLE, BUS, HIT} state;
-  logic [1:0] ich_state, ich_state_n;
-
-  stl_reg #(
-    .WIDTH      (2          ),
-    .RESET_VAL  (IDLE       )
-  ) reg_status (
-  	.i_clk      (i_clk      ),
-    .i_rst_n    (i_rst_n    ),
-    .i_wen      (1'b1       ),
-    .i_din      (ich_state_n),
-    .o_dout     (ich_state  )
+  iCache_intern u_iCache_intern(
+    .i_clk      (i_clk            ),
+    .i_rst_n    (i_rst_n          ),
+    .iCacheIf_S (iCachableCacheIf ),
+    .iMemIf_M   (iCachableMemIf   )
   );
 
-  always @(*) begin
-    case (ich_state)
-      IDLE:     if(iCacheIf_S.valid)begin
-                  if(|hit)begin
-                    ich_state_n = HIT;
-                  end else begin
-                    ich_state_n = BUS;
-                  end
-                end else begin
-                  ich_state_n = IDLE;
-                end
-      BUS:      if(iMemIf_M.ready)
-                  ich_state_n = IDLE;
-                else
-                  ich_state_n = BUS;
-      HIT:      ich_state_n = IDLE;
-      default:  ich_state_n = IDLE;
-    endcase 
-  end
+  assign iCacheIf_S.ready  = cachable ? iCachableCacheIf.ready  : iMemIf_M.ready    ;
+  assign iCacheIf_S.rdata  = cachable ? iCachableCacheIf.rdata  : iMemIf_M.rdata[`INS_WIDTH-1:0];
 
-  // 4. hit, read data array, update recent: /////////////////////////////////////////////////////////////////////////////////
+  assign iMemIf_M.valid    = cachable ? iCachableMemIf.valid    : iCacheIf_S.valid  ;
+  assign iMemIf_M.reqtyp   = cachable ? iCachableMemIf.reqtyp   : iCacheIf_S.reqtyp ;
+  assign iMemIf_M.addr     = cachable ? iCachableMemIf.addr     : iCacheIf_S.addr   ;
+  assign iMemIf_M.wdata    = cachable ? iCachableMemIf.wdata    : {{(128-`INS_WIDTH){1'b0}},iCacheIf_S.wdata};
+  assign iMemIf_M.size     = cachable ? iCachableMemIf.size     : iCacheIf_S.size   ;
 
-  assign recent_wen   = (ich_state == HIT);
-  assign recent_wdata = hit[1] ? 1'b1 : 1'b0;
-
-  for (genvar i=0; i<2 ; i=i+1) begin
-    assign dary_ren  [i] = (ich_state_n == HIT) & hit[i];
-  end
-
-  wire [127:0] hit_cacheline = hit[1] ? dary_rdata[1] : (hit[0] ? dary_rdata[0] : 128'b0);
-
-  // 5. hit, iCacheIf_S signal: //////////////////////////////////////////////////////////////////////////////////////////////
-  // input:  valid, addr, reqtyp(awlays `REQ_READ) , wdata(always 0), size(always 2'b10);
-  // output: ready, rdata;
-
-  assign iCacheIf_S.ready = (ich_state == HIT);
-
-  stl_mux_default #(4, 4, `ADR_WIDTH) mux_size (iCacheIf_S.rdata, offset, {`ADR_WIDTH'b0}, {
-    4'd0  , hit_cacheline[`ADR_WIDTH-1:0],
-    4'd4  , hit_cacheline[`ADR_WIDTH-1+32:32],
-    4'd8  , hit_cacheline[`ADR_WIDTH-1+64:64],
-    4'd12 , hit_cacheline[`ADR_WIDTH-1+96:96]
-  });
-
-  // 6. iMemIf_M signal: ////////////////////////////////////////////////////////////////////////////////////////////////////
-  // input:  ready, rdata;
-  // output: valid, reqtyp(awlays `REQ_READ), addr, wdata(always 0), size(always 2'b11);
-
-  assign iMemIf_M.valid  =  (ich_state == BUS);
-  assign iMemIf_M.reqtyp =  `REQ_READ;
-  assign iMemIf_M.addr   =  {tag,index,4'b0};
-  assign iMemIf_M.wdata  =  128'b0;
-  assign iMemIf_M.size   =  2'b11;
-
-  // 7. update tag_arry & data_array:///////////////////////////////////////////////////////////////////////////////////////
-  for (genvar i=0; i<2 ; i=i+1) begin
-    assign tary_wen    [i] = iMemIf_M.valid & iMemIf_M.ready & (i == victim_blkid);
-    assign tary_wdata  [i] = {1'b1,tag};
-    assign dary_wen    [i] = iMemIf_M.valid & iMemIf_M.ready & (i == victim_blkid);
-    assign dary_wstrb  [i] = 16'hffff;
-    assign dary_wdata  [i] = iMemIf_M.rdata;
-  end
+  assign iMemIf_M.cachable = cachable ; // use for uni2axi size/len.
 
 endmodule

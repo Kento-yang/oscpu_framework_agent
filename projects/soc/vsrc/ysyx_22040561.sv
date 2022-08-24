@@ -373,16 +373,17 @@ interface ysyx_22040561_uni_if;
   logic [ADDR_W-1:0]  addr  ;
   logic [DATA_W-1:0]  wdata ;
   logic [DATA_W-1:0]  rdata ;
+  logic               cachable;
   logic [1:0]         size  ;
-  
+
   modport Master(
-    output valid, input ready, output reqtyp, output addr,
-    output wdata, input rdata, output size
+    output valid, input ready, output reqtyp,   output addr,
+    output wdata, input rdata, output cachable, output size
   );
 
   modport Slave(
-    input valid, output ready, input reqtyp, input  addr,
-    input wdata, output rdata, input size
+    input valid, output ready, input reqtyp,   input addr,
+    input wdata, output rdata, input cachable, input size
   );
 
   // size : 00->byte, 01->half byte, 10->word, 11->double word.
@@ -654,11 +655,12 @@ module ysyx_22040561_top(
     end
   end
 
-  assign UniIf.valid  = uniID ? dMemIf.valid  : iMemIf.valid ;
-  assign UniIf.reqtyp = uniID ? dMemIf.reqtyp : iMemIf.reqtyp;
-  assign UniIf.addr   = uniID ? dMemIf.addr   : iMemIf.addr  ;
-  assign UniIf.wdata  = uniID ? dMemIf.wdata  : iMemIf.wdata ;
-  assign UniIf.size   = uniID ? dMemIf.size   : iMemIf.size  ;
+  assign UniIf.valid    = uniID ? dMemIf.valid    : iMemIf.valid    ;
+  assign UniIf.reqtyp   = uniID ? dMemIf.reqtyp   : iMemIf.reqtyp   ;
+  assign UniIf.addr     = uniID ? dMemIf.addr     : iMemIf.addr     ;
+  assign UniIf.wdata    = uniID ? dMemIf.wdata    : iMemIf.wdata    ;
+  assign UniIf.size     = uniID ? dMemIf.size     : iMemIf.size     ;
+  assign UniIf.cachable = uniID ? dMemIf.cachable : iMemIf.cachable ;
 
   assign dMemIf.ready = uniID ? UniIf.ready : 0;
   assign dMemIf.rdata = uniID ? UniIf.rdata : 0;
@@ -731,10 +733,10 @@ module ysyx_22040561_uni2axi # (
       else begin
           if (w_valid) begin
               case (w_state)
-                  W_STATE_IDLE:                                 w_state <= W_STATE_ADDR;
-                  W_STATE_ADDR:  if (aw_hs)                     w_state <= W_STATE_WRITE;
-                  W_STATE_WRITE: if (w_done & AxiIf_M.w_last)   w_state <= W_STATE_RESP;
-                  W_STATE_RESP:  if (b_hs)                      w_state <= W_STATE_IDLE;
+                  W_STATE_IDLE:               w_state <= W_STATE_ADDR;
+                  W_STATE_ADDR:  if (aw_hs)   w_state <= W_STATE_WRITE;
+                  W_STATE_WRITE: if (w_done)  w_state <= W_STATE_RESP;
+                  W_STATE_RESP:  if (b_hs)    w_state <= W_STATE_IDLE;
               endcase
           end
       end
@@ -770,11 +772,10 @@ module ysyx_22040561_uni2axi # (
   end
 
   // ------------------Process Data------------------
-  parameter AXI_SIZE      = $clog2(AXI_STRB_WIDTH);           // 3
   parameter TRANS_LEN     = UNI_DATA_WIDTH / AXI_DATA_WIDTH;  // 2
 
-  wire [2:0]                axi_size = AXI_SIZE[2:0];
-  wire [7:0]                axi_len  = TRANS_LEN - 1;
+  wire [2:0]                axi_size = {1'b0,UniIf_S.size};
+  wire [7:0]                axi_len  = UniIf_S.cachable ? (TRANS_LEN - 1) : 0;
   wire [AXI_ADDR_WIDTH-1:0] axi_addr = {{(AXI_ADDR_WIDTH-UNI_ADDR_WIDTH){1'b0}},UniIf_S.addr};
 
   wire [AXI_ID_WIDTH-1:0]   axi_id   = {AXI_ID_WIDTH{1'b0}};
@@ -1273,7 +1274,7 @@ module ysyx_22040561_ifu (
 
   ysyx_22040561_stl_reg #(
     .WIDTH     (`CPU_WIDTH          ),
-    .RESET_VAL (`CPU_WIDTH'h80000000)
+    .RESET_VAL (`CPU_WIDTH'h30000000)
   ) prereg (
     .i_clk   (i_clk       ),
     .i_rst_n (i_rst_n     ),
@@ -3210,8 +3211,63 @@ module ysyx_22040561_tag_ary#(
 
 endmodule
 
-
 module ysyx_22040561_dCache (
+  input                       i_clk     ,
+  input                       i_rst_n   ,
+  ysyx_22040561_uni_if.Slave  dCacheIf_S,  //  64 bit width
+  ysyx_22040561_uni_if.Master dMemIf_M     // 128 bit width
+);
+
+/*    device                    address
+      reserve             0x0000_0000~0x01ff_ffff
+       CLINT              0x0200_0000~0x0200_ffff
+      reserve             0x0201_0000~0x0fff_ffff
+     UART16550            0x1000_0000~0x1000_0fff
+    SPI controller        0x1000_1000~0x1000_1fff
+      reserve             0x1000_2000~0x2fff_ffff
+  SPI-flash XIP mode      0x3000_0000~0x3fff_ffff
+    ChipLink MMIO         0x4000_0000~0x7fff_ffff
+       memory             0x8000_0000~0xffff_ffff
+*/
+
+  // in this module, choose cachable memory, or uncachable device.
+  // only cachable interface can read iCache, otherwise dCacheIf_S connect dMemIf_M directly.
+
+  wire cachable = dCacheIf_S.addr[31];
+
+  ysyx_22040561_uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(`CPU_WIDTH)) dCachableCacheIf();
+  ysyx_22040561_uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(128)) dCachableMemIf();
+
+  assign dCachableCacheIf.valid    = dCacheIf_S.valid & cachable;
+  assign dCachableCacheIf.reqtyp   = dCacheIf_S.reqtyp   ;
+  assign dCachableCacheIf.addr     = dCacheIf_S.addr     ;
+  assign dCachableCacheIf.wdata    = dCacheIf_S.wdata    ;
+  assign dCachableCacheIf.size     = dCacheIf_S.size     ;
+
+  assign dCachableMemIf.ready      = dMemIf_M.ready & cachable;
+  assign dCachableMemIf.rdata      = dMemIf_M.rdata;
+
+  ysyx_22040561_dCache_intern u_dCache_intern(
+    .i_clk      (i_clk            ),
+    .i_rst_n    (i_rst_n          ),
+    .dCacheIf_S (dCachableCacheIf ),
+    .dMemIf_M   (dCachableMemIf   )
+  );
+
+  assign dCacheIf_S.ready  = cachable ? dCachableCacheIf.ready  : dMemIf_M.ready    ;
+  assign dCacheIf_S.rdata  = cachable ? dCachableCacheIf.rdata  : dMemIf_M.rdata[`CPU_WIDTH-1:0];
+
+  assign dMemIf_M.valid    = cachable ? dCachableMemIf.valid    : dCacheIf_S.valid  ;
+  assign dMemIf_M.reqtyp   = cachable ? dCachableMemIf.reqtyp   : dCacheIf_S.reqtyp ;
+  assign dMemIf_M.addr     = cachable ? dCachableMemIf.addr     : dCacheIf_S.addr   ;
+  assign dMemIf_M.wdata    = cachable ? dCachableMemIf.wdata    : {{(128-`CPU_WIDTH){1'b0}},dCacheIf_S.wdata};
+  assign dMemIf_M.size     = cachable ? dCachableMemIf.size     : dCacheIf_S.size   ;
+
+  assign dMemIf_M.cachable = cachable ; // use for uni2axi size/len.
+
+endmodule
+
+module ysyx_22040561_dCache_intern (
   input                       i_clk     ,
   input                       i_rst_n   ,
   ysyx_22040561_uni_if.Slave  dCacheIf_S,  //  64 bit width
@@ -3345,7 +3401,7 @@ module ysyx_22040561_dCache (
     endcase
   end
 
-  // 4. hit, read/write data array, update recent/dirty, update iCacheIf_S signal: ///////////////////////////////////////////
+  // 4. hit, read/write data array, update recent/dirty, update dCacheIf_S signal: ///////////////////////////////////////////
   logic                 tary_hit_wen   [1:0];
   logic [`dTARY_W-1:0]  tary_hit_wdata [1:0];
   logic                 dary_hit_ren   [1:0];
@@ -3383,7 +3439,7 @@ module ysyx_22040561_dCache (
     assign dary_hit_wdata [i] = {64'b0, dCacheIf_S.wdata} << {offset,3'b0}; // bits. {offset,3'b0} means (offset*8)
   end
 
-  // 4.4 update iCacheIf_S signal: ///////////////////////////////////////////////////////////////////////////////////////////
+  // 4.4 update dCacheIf_S signal: ///////////////////////////////////////////////////////////////////////////////////////////
   // input:  valid, addr, reqtyp, wdata, size;
   // output: ready, rdata;
   assign dCacheIf_S.ready = (ich_state == HIT);
@@ -3435,8 +3491,63 @@ module ysyx_22040561_dCache (
 
 endmodule
 
-
 module ysyx_22040561_iCache (
+  input                       i_clk     ,
+  input                       i_rst_n   ,
+  ysyx_22040561_uni_if.Slave  iCacheIf_S,  //  32 bit width
+  ysyx_22040561_uni_if.Master iMemIf_M     // 128 bit width
+);
+
+/*    device                    address
+      reserve             0x0000_0000~0x01ff_ffff
+       CLINT              0x0200_0000~0x0200_ffff
+      reserve             0x0201_0000~0x0fff_ffff
+     UART16550            0x1000_0000~0x1000_0fff
+    SPI controller        0x1000_1000~0x1000_1fff
+      reserve             0x1000_2000~0x2fff_ffff
+  SPI-flash XIP mode      0x3000_0000~0x3fff_ffff
+    ChipLink MMIO         0x4000_0000~0x7fff_ffff
+       memory             0x8000_0000~0xffff_ffff
+*/
+
+  // in this module, choose cachable memory, or uncachable device.
+  // only cachable interface can read iCache, otherwise iCacheIf_S connect iMemIf_M directly.
+
+  wire cachable = iCacheIf_S.addr[31];
+
+  ysyx_22040561_uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(`INS_WIDTH)) iCachableCacheIf();
+  ysyx_22040561_uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(128)) iCachableMemIf();
+
+  assign iCachableCacheIf.valid    = iCacheIf_S.valid & cachable;
+  assign iCachableCacheIf.reqtyp   = iCacheIf_S.reqtyp   ;
+  assign iCachableCacheIf.addr     = iCacheIf_S.addr     ;
+  assign iCachableCacheIf.wdata    = iCacheIf_S.wdata    ;
+  assign iCachableCacheIf.size     = iCacheIf_S.size     ;
+
+  assign iCachableMemIf.ready      = iMemIf_M.ready & cachable;
+  assign iCachableMemIf.rdata      = iMemIf_M.rdata;
+
+  ysyx_22040561_iCache_intern u_iCache_intern(
+    .i_clk      (i_clk            ),
+    .i_rst_n    (i_rst_n          ),
+    .iCacheIf_S (iCachableCacheIf ),
+    .iMemIf_M   (iCachableMemIf   )
+  );
+
+  assign iCacheIf_S.ready  = cachable ? iCachableCacheIf.ready  : iMemIf_M.ready    ;
+  assign iCacheIf_S.rdata  = cachable ? iCachableCacheIf.rdata  : iMemIf_M.rdata[`INS_WIDTH-1:0];
+
+  assign iMemIf_M.valid    = cachable ? iCachableMemIf.valid    : iCacheIf_S.valid  ;
+  assign iMemIf_M.reqtyp   = cachable ? iCachableMemIf.reqtyp   : iCacheIf_S.reqtyp ;
+  assign iMemIf_M.addr     = cachable ? iCachableMemIf.addr     : iCacheIf_S.addr   ;
+  assign iMemIf_M.wdata    = cachable ? iCachableMemIf.wdata    : {{(128-`INS_WIDTH){1'b0}},iCacheIf_S.wdata};
+  assign iMemIf_M.size     = cachable ? iCachableMemIf.size     : iCacheIf_S.size   ;
+
+  assign iMemIf_M.cachable = cachable ; // use for uni2axi size/len.
+
+endmodule
+
+module ysyx_22040561_iCache_intern (
   input                       i_clk     ,
   input                       i_rst_n   ,
   ysyx_22040561_uni_if.Slave  iCacheIf_S,  //  32 bit width

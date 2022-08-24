@@ -124,8 +124,8 @@ build_diff_proj() {
 build_soc_proj() {
     mkdir -p $BUILD_PATH/vsrc $BUILD_PATH/csrc
 
-    if [[ ! -f "$PROJECT_PATH/$VSRC_FOLDER/ysyx_${ID:0-6}.v" ]]; then
-        echo "$VSRC_FOLDER/ysyx_${ID:0-6}.v not detected. Please follow the README of ysyxSoC to get this file."
+    if [[ ! -f "$PROJECT_PATH/$VSRC_FOLDER/${ID}.sv" ]]; then
+        echo "$VSRC_FOLDER/${ID}.sv not detected. Please follow the README of ysyxSoC to get this file."
         exit 1
     fi
 
@@ -140,7 +140,7 @@ build_soc_proj() {
 
     if [[ ! -f $BUILD_PATH/vsrc/ysyxSoCFull.v ]]; then
         cp $YSYXSOC_HOME/ysyx/soc/ysyxSoCFull.v $BUILD_PATH/vsrc/
-        sed -i -e "s/ysyx_000000/ysyx_${ID:0-6}/g" $BUILD_PATH/vsrc/ysyxSoCFull.v
+        sed -i -e "s/ysyx_000000/${ID}/g" $BUILD_PATH/vsrc/ysyxSoCFull.v
     fi
 
     ln -s $YSYXSOC_HOME/ysyx/peripheral $BUILD_PATH/vsrc/

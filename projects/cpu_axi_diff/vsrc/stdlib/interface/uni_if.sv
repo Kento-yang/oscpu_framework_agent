@@ -8,16 +8,17 @@ interface uni_if;
   logic [ADDR_W-1:0]  addr  ;
   logic [DATA_W-1:0]  wdata ;
   logic [DATA_W-1:0]  rdata ;
+  logic               cachable;
   logic [1:0]         size  ;
-  
+
   modport Master(
-    output valid, input ready, output reqtyp, output addr,
-    output wdata, input rdata, output size
+    output valid, input ready, output reqtyp,   output addr,
+    output wdata, input rdata, output cachable, output size
   );
 
   modport Slave(
-    input valid, output ready, input reqtyp, input  addr,
-    input wdata, output rdata, input size
+    input valid, output ready, input reqtyp,   input addr,
+    input wdata, output rdata, input cachable, input size
   );
 
   // size : 00->byte, 01->half byte, 10->word, 11->double word.

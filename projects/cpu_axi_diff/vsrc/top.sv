@@ -111,17 +111,18 @@ module top(
     end
   end
 
-  assign UniIf.valid  = uniID ? dMemIf.valid  : iMemIf.valid ;
-  assign UniIf.reqtyp = uniID ? dMemIf.reqtyp : iMemIf.reqtyp;
-  assign UniIf.addr   = uniID ? dMemIf.addr   : iMemIf.addr  ;
-  assign UniIf.wdata  = uniID ? dMemIf.wdata  : iMemIf.wdata ;
-  assign UniIf.size   = uniID ? dMemIf.size   : iMemIf.size  ;
+  assign UniIf.valid    = uniID ? dMemIf.valid    : iMemIf.valid    ;
+  assign UniIf.reqtyp   = uniID ? dMemIf.reqtyp   : iMemIf.reqtyp   ;
+  assign UniIf.addr     = uniID ? dMemIf.addr     : iMemIf.addr     ;
+  assign UniIf.wdata    = uniID ? dMemIf.wdata    : iMemIf.wdata    ;
+  assign UniIf.size     = uniID ? dMemIf.size     : iMemIf.size     ;
+  assign UniIf.cachable = uniID ? dMemIf.cachable : iMemIf.cachable ;
 
-  assign dMemIf.ready = uniID ? UniIf.ready : 0;
-  assign dMemIf.rdata = uniID ? UniIf.rdata : 0;
+  assign dMemIf.ready   = uniID ? UniIf.ready : 0;
+  assign dMemIf.rdata   = uniID ? UniIf.rdata : 0;
 
-  assign iMemIf.ready = uniID ? 0 : UniIf.ready;
-  assign iMemIf.rdata = uniID ? 0 : UniIf.rdata;
+  assign iMemIf.ready   = uniID ? 0 : UniIf.ready;
+  assign iMemIf.rdata   = uniID ? 0 : UniIf.rdata;
 
   // 5.UniIf 2 AxiIf : //////////////////////////////////////////
 
