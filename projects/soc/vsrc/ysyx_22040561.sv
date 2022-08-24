@@ -153,6 +153,8 @@
 // clint define:
 `define CLINT_BASE_ADDR `ADR_WIDTH'h02000000
 `define CLINT_END_ADDR  `ADR_WIDTH'h0200ffff
+`define UART_BASE_ADDR  `ADR_WIDTH'h10000000
+`define UART_END_ADDR   `ADR_WIDTH'h10000fff
 `define MSIP_ADDR       `CLINT_BASE_ADDR+`ADR_WIDTH'h0000
 `define MTIMECMP_ADDR   `CLINT_BASE_ADDR+`ADR_WIDTH'h4000
 `define MTIME_ADDR      `CLINT_BASE_ADDR+`ADR_WIDTH'hBFF8
@@ -772,11 +774,22 @@ module ysyx_22040561_uni2axi # (
   end
 
   // ------------------Process Data------------------
-  parameter TRANS_LEN     = UNI_DATA_WIDTH / AXI_DATA_WIDTH;  // 2
+  parameter TRANS_LEN = UNI_DATA_WIDTH / AXI_DATA_WIDTH;  // 2
+
+  wire        is_uart = (UniIf_S.addr & {{(`ADR_WIDTH-12){1'b1}},12'b0}) == `UART_BASE_ADDR;
+  wire [1:0]  offset  = UniIf_S.addr[1:0];
+
+  wire        size_b  = (UniIf_S.size == 2'b00);
+  wire        size_h  = (UniIf_S.size == 2'b01);
+  wire        size_w  = (UniIf_S.size == 2'b10);
+
+  wire [AXI_STRB_WIDTH-1:0] dev_strb = (({AXI_STRB_WIDTH{size_b}} & {8'b0000_0001})
+                                      | ({AXI_STRB_WIDTH{size_h}} & {8'b0000_0011})
+                                      | ({AXI_STRB_WIDTH{size_w}} & {8'b0000_1111})) << offset;
 
   wire [2:0]                axi_size = {1'b0,UniIf_S.size};
   wire [7:0]                axi_len  = UniIf_S.cachable ? (TRANS_LEN - 1) : 0;
-  wire [AXI_ADDR_WIDTH-1:0] axi_addr = {{(AXI_ADDR_WIDTH-UNI_ADDR_WIDTH){1'b0}},UniIf_S.addr};
+  wire [AXI_ADDR_WIDTH-1:0] axi_addr = {{(AXI_ADDR_WIDTH-UNI_ADDR_WIDTH){1'b0}},UniIf_S.addr[UNI_ADDR_WIDTH-1:2], is_uart ? UniIf_S.addr[1:0]: 2'b00};
 
   wire [AXI_ID_WIDTH-1:0]   axi_id   = {AXI_ID_WIDTH{1'b0}};
   wire [AXI_USER_WIDTH-1:0] axi_user = {AXI_USER_WIDTH{1'b0}};
@@ -813,9 +826,8 @@ module ysyx_22040561_uni2axi # (
   assign AxiIf_M.w_valid    = w_state_write;
   assign AxiIf_M.w_last     = w_hs & (len == axi_len);
   assign AxiIf_M.w_user     = axi_user;                                                                         // no use.
-  assign AxiIf_M.w_strb     = {AXI_STRB_WIDTH{1'b1}};
-
-  assign AxiIf_M.w_data     = AxiIf_M.w_valid ? UniIf_S.wdata[len*AXI_DATA_WIDTH+:AXI_DATA_WIDTH] : {AXI_DATA_WIDTH{1'b0}};
+  assign AxiIf_M.w_strb     = UniIf_S.cachable ? {AXI_STRB_WIDTH{1'b1}} : dev_strb;
+  assign AxiIf_M.w_data     = UniIf_S.wdata[len*AXI_DATA_WIDTH+:AXI_DATA_WIDTH] << {offset,3'b0};
 
   // ------------------Read Transaction------------------
 
@@ -840,7 +852,7 @@ module ysyx_22040561_uni2axi # (
       if (!i_rst_n) begin
         UniIf_S.rdata[i*AXI_DATA_WIDTH+:AXI_DATA_WIDTH] <= 0;
       end else if (AxiIf_M.r_valid & AxiIf_M.r_ready & (i==len)) begin
-        UniIf_S.rdata[i*AXI_DATA_WIDTH+:AXI_DATA_WIDTH] <= AxiIf_M.r_data;
+        UniIf_S.rdata[i*AXI_DATA_WIDTH+:AXI_DATA_WIDTH] <= (AxiIf_M.r_data >> {offset,3'b0});
       end
     end
   end
