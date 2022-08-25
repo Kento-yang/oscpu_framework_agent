@@ -19,7 +19,6 @@ module core_top(
 
   logic                   ifid_nop;               // for branch adventure
   logic                   ifid_stall, idex_nop;   // for data adventure
-  logic                   idu_ldstbp, exu_ldstbp; // for ld -> st bypass.
   logic                   ifu_valid , ifu_ready;  // pipeline shakehands: pc/if -> if/id
   logic                   idu_valid , idu_ready;  // pipeline shakehands: if/id -> id/ex
   logic                   exu_valid , exu_ready;  // pipeline shakehands: id/ex -> ex/ls
@@ -125,13 +124,12 @@ module core_top(
   // 2.3 exu ///////////////////////////////////////////////
 
   // generate exu output value:
-  logic [`CPU_WIDTH-1:0]      exu_exres;
-  // bypss: 
-  logic [`CPU_WIDTH-1:0]      exu_rs2;    // from exu to bypass unit.
-  logic [`CPU_WIDTH-1:0]      exu_rs2_bp; // from bypss unit to lsu input for store ins.
+  logic [`CPU_WIDTH-1:0]      exu_exres   ; // for lsu addr, or for wbu rd.
   // for lsu:
-  logic [2:0]                 exu_lsfunc3;
-  logic                       exu_lden,exu_sten;
+  logic                       exu_lden    ; // for lsu load en.
+  logic                       exu_sten    ; // for lsu store en.
+  logic [`CPU_WIDTH-1:0]      exu_rs2     ; // for lsu data.
+  logic [2:0]                 exu_lsfunc3 ; // for lsu func3
   // for wbu:
   logic [`REG_ADDRW-1:0]      exu_rdid    ;
   logic                       exu_rdwen   ;
@@ -160,7 +158,6 @@ module core_top(
     .i_idu_lsfunc3  (idu_lsfunc3    ),
     .i_idu_lden     (idu_lden       ),
     .i_idu_sten     (idu_sten       ),
-    .i_idu_ldstbp   (idu_ldstbp     ),
     .i_idu_rdid     (idu_rdid       ),
     .i_idu_rdwen    (idu_rdwen      ),
     .i_idu_csrdid   (idu_csrdid     ),
@@ -172,7 +169,6 @@ module core_top(
     .o_exu_lsfunc3  (exu_lsfunc3    ),
     .o_exu_lden     (exu_lden       ),
     .o_exu_sten     (exu_sten       ),
-    .o_exu_ldstbp   (exu_ldstbp     ),
     .o_exu_rdid     (exu_rdid       ),
     .o_exu_rdwen    (exu_rdwen      ),
     .o_exu_res      (exu_exres      ),
@@ -205,7 +201,7 @@ module core_top(
     .o_post_valid  (lsu_valid     ),
     .i_post_ready  (lsu_ready     ),
     .i_exu_exres   (exu_exres     ),
-    .i_exu_rs2     (exu_rs2_bp    ),
+    .i_exu_rs2     (exu_rs2       ),
     .i_exu_lsfunc3 (exu_lsfunc3   ),
     .i_exu_lden    (exu_lden      ),
     .i_exu_sten    (exu_sten      ),
@@ -332,7 +328,6 @@ module core_top(
   bypass u_bypass(
     .i_clk        (i_clk        ),
     .i_rst_n      (i_rst_n      ),
-    // generate rs1,rs2:
     .i_idu_rs1id  (idu_rs1id    ),
     .i_idu_rs2id  (idu_rs2id    ),
     .i_idu_sten   (idu_sten     ),
@@ -352,11 +347,6 @@ module core_top(
     .o_idu_rs2    (idu_rs2      ),
     .o_idex_nop   (idex_nop     ),
     .o_ifid_stall (ifid_stall   ),
-    // generate regst:
-    .i_exu_rs2    (exu_rs2      ),
-    .o_idu_ldstbp (idu_ldstbp   ),
-    .i_exu_ldstbp (exu_ldstbp   ),
-    .o_exu_rs2    (exu_rs2_bp   ),
     .s_regs       (s_regs       )
   );
 

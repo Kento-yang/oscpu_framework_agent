@@ -881,7 +881,6 @@ module ysyx_22040561_core_top(
 
   logic                   ifid_nop;               // for branch adventure
   logic                   ifid_stall, idex_nop;   // for data adventure
-  logic                   idu_ldstbp, exu_ldstbp; // for ld -> st bypass.
   logic                   ifu_valid , ifu_ready;  // pipeline shakehands: pc/if -> if/id
   logic                   idu_valid , idu_ready;  // pipeline shakehands: if/id -> id/ex
   logic                   exu_valid , exu_ready;  // pipeline shakehands: id/ex -> ex/ls
@@ -980,13 +979,12 @@ module ysyx_22040561_core_top(
   // 2.3 exu ///////////////////////////////////////////////
 
   // generate exu output value:
-  logic [`CPU_WIDTH-1:0]      exu_exres;
-  // bypss: 
-  logic [`CPU_WIDTH-1:0]      exu_rs2;    // from exu to bypass unit.
-  logic [`CPU_WIDTH-1:0]      exu_rs2_bp; // from bypss unit to lsu input for store ins.
+  logic [`CPU_WIDTH-1:0]      exu_exres   ; // for lsu addr, or for wbu rd.
   // for lsu:
-  logic [2:0]                 exu_lsfunc3;
-  logic                       exu_lden,exu_sten;
+  logic                       exu_lden    ; // for lsu load en.
+  logic                       exu_sten    ; // for lsu store en.
+  logic [`CPU_WIDTH-1:0]      exu_rs2     ; // for lsu data.
+  logic [2:0]                 exu_lsfunc3 ; // for lsu func3
   // for wbu:
   logic [`REG_ADDRW-1:0]      exu_rdid    ;
   logic                       exu_rdwen   ;
@@ -1015,7 +1013,6 @@ module ysyx_22040561_core_top(
     .i_idu_lsfunc3  (idu_lsfunc3    ),
     .i_idu_lden     (idu_lden       ),
     .i_idu_sten     (idu_sten       ),
-    .i_idu_ldstbp   (idu_ldstbp     ),
     .i_idu_rdid     (idu_rdid       ),
     .i_idu_rdwen    (idu_rdwen      ),
     .i_idu_csrdid   (idu_csrdid     ),
@@ -1027,7 +1024,6 @@ module ysyx_22040561_core_top(
     .o_exu_lsfunc3  (exu_lsfunc3    ),
     .o_exu_lden     (exu_lden       ),
     .o_exu_sten     (exu_sten       ),
-    .o_exu_ldstbp   (exu_ldstbp     ),
     .o_exu_rdid     (exu_rdid       ),
     .o_exu_rdwen    (exu_rdwen      ),
     .o_exu_res      (exu_exres      ),
@@ -1060,7 +1056,7 @@ module ysyx_22040561_core_top(
     .o_post_valid  (lsu_valid     ),
     .i_post_ready  (lsu_ready     ),
     .i_exu_exres   (exu_exres     ),
-    .i_exu_rs2     (exu_rs2_bp    ),
+    .i_exu_rs2     (exu_rs2    ),
     .i_exu_lsfunc3 (exu_lsfunc3   ),
     .i_exu_lden    (exu_lden      ),
     .i_exu_sten    (exu_sten      ),
@@ -1184,7 +1180,6 @@ module ysyx_22040561_core_top(
   ysyx_22040561_bypass u_bypass(
     .i_clk        (i_clk        ),
     .i_rst_n      (i_rst_n      ),
-    // generate rs1,rs2:
     .i_idu_rs1id  (idu_rs1id    ),
     .i_idu_rs2id  (idu_rs2id    ),
     .i_idu_sten   (idu_sten     ),
@@ -1203,12 +1198,7 @@ module ysyx_22040561_core_top(
     .o_idu_rs1    (idu_rs1      ),
     .o_idu_rs2    (idu_rs2      ),
     .o_idex_nop   (idex_nop     ),
-    .o_ifid_stall (ifid_stall   ),
-    // generate regst:
-    .i_exu_rs2    (exu_rs2      ),
-    .o_idu_ldstbp (idu_ldstbp   ),
-    .i_exu_ldstbp (exu_ldstbp   ),
-    .o_exu_rs2    (exu_rs2_bp   )
+    .o_ifid_stall (ifid_stall   )
   );
 
   ysyx_22040561_csrfile u_csrfile(
@@ -1711,7 +1701,6 @@ module ysyx_22040561_exu (
   input  logic  [2:0]                i_idu_lsfunc3 ,
   input  logic                       i_idu_lden    ,
   input  logic                       i_idu_sten    ,
-  input  logic                       i_idu_ldstbp  ,
   // 2.3 dealy for wbu:
   input  logic  [`REG_ADDRW-1:0]     i_idu_rdid    ,
   input  logic                       i_idu_rdwen   ,
@@ -1728,7 +1717,6 @@ module ysyx_22040561_exu (
   output logic  [2:0]                o_exu_lsfunc3 ,
   output logic                       o_exu_lden    ,
   output logic                       o_exu_sten    ,
-  output logic                       o_exu_ldstbp  ,
   // 3.2 for lsu, dealy to use for wbu:
   output logic  [`REG_ADDRW-1:0]     o_exu_rdid    ,
   output logic                       o_exu_rdwen   ,
@@ -1789,7 +1777,6 @@ module ysyx_22040561_exu (
   logic  [2:0]                 idu_lsfunc3, idu_lsfunc3_r ;
   logic                        idu_lden   , idu_lden_r    ;
   logic                        idu_sten   , idu_sten_r    ;
-  logic                        idu_ldstbp , idu_ldstbp_r  ;
   logic  [`REG_ADDRW-1:0]      idu_rdid   , idu_rdid_r    ;
   logic                        idu_rdwen  , idu_rdwen_r   ;
   logic  [`CSR_ADDRW-1:0]      idu_csrdid , idu_csrdid_r  ;
@@ -1810,7 +1797,6 @@ module ysyx_22040561_exu (
   assign idu_lsfunc3 = i_idu_lsfunc3 ;
   assign idu_lden    = i_pre_nop ?  1'b0         : i_idu_lden    ;
   assign idu_sten    = i_pre_nop ?  1'b0         : i_idu_sten    ;
-  assign idu_ldstbp  = i_pre_nop ?  1'b0         : i_idu_ldstbp  ;
   assign idu_rdid    = i_pre_nop ? `REG_ADDRW'b0 : i_idu_rdid    ;
   assign idu_rdwen   = i_pre_nop ?  1'b0         : i_idu_rdwen   ;
   assign idu_csrdid  = i_pre_nop ? `CSR_ADDRW'b0 : i_idu_csrdid  ;
@@ -1820,14 +1806,14 @@ module ysyx_22040561_exu (
   assign idu_nop     = i_pre_nop | i_idu_nop ;
 
   ysyx_22040561_stl_reg #(
-    .WIDTH      (5*`CPU_WIDTH+`REG_ADDRW+10+`EXU_SEL_WIDTH+`EXU_OPT_WIDTH+`CSR_OPT_WIDTH+`CSR_ADDRW+`INS_WIDTH+1),
+    .WIDTH      (5*`CPU_WIDTH+`REG_ADDRW+10+`EXU_SEL_WIDTH+`EXU_OPT_WIDTH+`CSR_OPT_WIDTH+`CSR_ADDRW+`INS_WIDTH),
     .RESET_VAL  (0       )
   ) regs(
   	.i_clk      (i_clk   ),
     .i_rst_n    (i_rst_n ),
     .i_wen      (i_flush | pre_sh  ),
-    .i_din      (i_flush ? 0: {idu_sysins  , idu_imm  , idu_rs1  , idu_rs2  , idu_csrs  , idu_exsrc  , idu_exopt  , idu_excsrsrc  , idu_excsropt  , idu_lsfunc3  , idu_lden  , idu_sten  , idu_ldstbp  , idu_rdid  , idu_rdwen  , idu_csrdid  , idu_csrdwen  , idu_pc  , idu_ins  , idu_nop  } ),
-    .o_dout     (             {idu_sysins_r, idu_imm_r, idu_rs1_r, idu_rs2_r, idu_csrs_r, idu_exsrc_r, idu_exopt_r, idu_excsrsrc_r, idu_excsropt_r, idu_lsfunc3_r, idu_lden_r, idu_sten_r, idu_ldstbp_r, idu_rdid_r, idu_rdwen_r, idu_csrdid_r, idu_csrdwen_r, idu_pc_r, idu_ins_r, idu_nop_r} )
+    .i_din      (i_flush ? 0: {idu_sysins  , idu_imm  , idu_rs1  , idu_rs2  , idu_csrs  , idu_exsrc  , idu_exopt  , idu_excsrsrc  , idu_excsropt  , idu_lsfunc3  , idu_lden  , idu_sten  , idu_rdid  , idu_rdwen  , idu_csrdid  , idu_csrdwen  , idu_pc  , idu_ins  , idu_nop  } ),
+    .o_dout     (             {idu_sysins_r, idu_imm_r, idu_rs1_r, idu_rs2_r, idu_csrs_r, idu_exsrc_r, idu_exopt_r, idu_excsrsrc_r, idu_excsropt_r, idu_lsfunc3_r, idu_lden_r, idu_sten_r, idu_rdid_r, idu_rdwen_r, idu_csrdid_r, idu_csrdwen_r, idu_pc_r, idu_ins_r, idu_nop_r} )
   );
 
   // 3. use pre stage system signals to generate comb logic for post stage://////////////////////////////////////////
@@ -1976,7 +1962,6 @@ module ysyx_22040561_exu (
   assign o_exu_lsfunc3 = idu_lsfunc3_r;
   assign o_exu_lden    = idu_lden_r   ;
   assign o_exu_sten    = idu_sten_r   ;
-  assign o_exu_ldstbp  = idu_ldstbp_r ;
   assign o_exu_rdid    = idu_rdid_r   ;
   assign o_exu_rdwen   = idu_rdwen_r  ;
   assign o_exu_res     = idu_sysins_r ? sys_rdres :
@@ -2864,14 +2849,7 @@ module ysyx_22040561_bypass (
   output logic  [`CPU_WIDTH-1:0]   o_idu_rs2     ,
   // to pc if/id id/ex:
   output                           o_idex_nop    ,
-  output                           o_ifid_stall  ,
-
-  // 2. from id/ex pipe reg & lsu out to generate regst for ex/ls pipe reg in:
-  input         [`CPU_WIDTH-1:0]   i_exu_rs2     ,  // from id/ex pipe reg out.
-//input         [`CPU_WIDTH-1:0]   i_lsu_lsres   ,  // from lsu_lsres, reg from last cycle.
-  output                           o_idu_ldstbp  ,  // (load+store) bypass, to id/ex in.
-  input                            i_exu_ldstbp  ,  // (load+store) bypass, from id/ex out. one cycle after o_idu_ldstbp.
-  output        [`CPU_WIDTH-1:0]   o_exu_rs2        // to ex/ls pipe reg in , use for lsu in next cycle.
+  output                           o_ifid_stall
 );
 
   // 1. from exu/lsu/wbu to generate rs1/rs2 for idu: /////////////////////////////////////////////////////
@@ -2914,12 +2892,8 @@ module ysyx_22040561_bypass (
     end
   end
 
-  assign o_idex_nop =  i_exu_lden && i_exu_rdwen && ( i_exu_rdid == i_idu_rs1id || i_exu_rdid == i_idu_rs2id ) && !o_idu_ldstbp;
+  assign o_idex_nop =  i_exu_lden && i_exu_rdwen && ( i_exu_rdid == i_idu_rs1id || i_exu_rdid == i_idu_rs2id );
   assign o_ifid_stall = o_idex_nop;
-
-  // 2. from id/ex pipe reg & lsu out to generate regst for ex/ls pipe reg in:////////////////////////////////////
-  assign o_idu_ldstbp  =  i_exu_lden && i_exu_rdwen && (i_exu_rdid == i_idu_rs2id) && i_idu_sten;  //load + store, do not need bubble!
-  assign o_exu_rs2 = i_exu_ldstbp ? i_lsu_lsres : i_exu_rs2;
 
 endmodule
 

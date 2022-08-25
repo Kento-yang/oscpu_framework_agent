@@ -30,14 +30,7 @@ module bypass (
   output                           o_idex_nop    ,
   output                           o_ifid_stall  ,
 
-  // 2. from id/ex pipe reg & lsu out to generate regst for ex/ls pipe reg in:
-  input         [`CPU_WIDTH-1:0]   i_exu_rs2     ,  // from id/ex pipe reg out.
-//input         [`CPU_WIDTH-1:0]   i_lsu_lsres   ,  // from lsu_lsres, reg from last cycle.
-  output                           o_idu_ldstbp  ,  // (load+store) bypass, to id/ex in.
-  input                            i_exu_ldstbp  ,  // (load+store) bypass, from id/ex out. one cycle after o_idu_ldstbp.
-  output        [`CPU_WIDTH-1:0]   o_exu_rs2     ,  // to ex/ls pipe reg in , use for lsu in next cycle.
-
-  // 3. for sim,difftest.:
+  // 2. for sim,difftest.:
   output        [`CPU_WIDTH-1:0]   s_regs [`REG_COUNT-1:0]    // use for difftest.
 );
 
@@ -82,11 +75,7 @@ module bypass (
     end
   end
 
-  assign o_idex_nop =  i_exu_lden && i_exu_rdwen && ( i_exu_rdid == i_idu_rs1id || i_exu_rdid == i_idu_rs2id ) && !o_idu_ldstbp;
+  assign o_idex_nop =  i_exu_lden && i_exu_rdwen && ( i_exu_rdid == i_idu_rs1id || i_exu_rdid == i_idu_rs2id );
   assign o_ifid_stall = o_idex_nop;
-
-  // 2. from id/ex pipe reg & lsu out to generate regst for ex/ls pipe reg in:////////////////////////////////////
-  assign o_idu_ldstbp  =  i_exu_lden && i_exu_rdwen && (i_exu_rdid == i_idu_rs2id) && i_idu_sten;  //load + store, do not need bubble!
-  assign o_exu_rs2 = i_exu_ldstbp ? i_lsu_lsres : i_exu_rs2;
 
 endmodule
