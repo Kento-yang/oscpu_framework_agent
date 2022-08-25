@@ -645,14 +645,17 @@ module ysyx_22040561_top(
 
   ysyx_22040561_uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(128)) UniIf();
 
+  wire dMemIfDone = dMemIf.valid & dMemIf.ready ;
+  wire iMemIfFree = iMemIf.valid & iMemIf.ready | !iMemIf.valid ;
+
   always_ff @(posedge i_clk or negedge i_rst_n) begin
     if(!i_rst_n)begin
       uniID <= 1'b0;
     end
-    else if(dMemIf.valid & dMemIf.ready)begin
+    else if(dMemIfDone)begin
       uniID <= 1'b0;
     end
-    else if(iCacheIf.valid & iCacheIf.ready & dMemIf.valid)begin
+    else if(dMemIf.valid & iMemIfFree)begin
       uniID <= 1'b1;
     end
   end

@@ -5,10 +5,14 @@ if [ $2 = "clean" ]; then
     rm -rf /home/dingyawei/oscpu-framework/projects/soc/build_test
 fi
 
-if [ $1 = "soc" ]; then
+if [ $1 = "soc-flash" ]; then
     #bash build.sh -e soc -b -s -y -v '--timescale "1ns/1ns" -Wno-fatal --trace' -a "-i ysyxSoC/flash/hello-flash.bin --dump-wave"
     #bash build.sh -e soc -b -s -y -v '--timescale "1ns/1ns" -Wno-fatal --trace' -a "-i ysyxSoC/flash/memtest-flash.bin --dump-wave"
     bash build.sh -e soc -b -s -y -v '--timescale "1ns/1ns" -Wno-fatal --trace' -a "-i ysyxSoC/flash/rtthread-flash.bin"
+elif [ $1 = "soc-loader" ]; then
+    bash build.sh -e soc -b -s -y -v '--timescale "1ns/1ns" -Wno-fatal --trace' -a "-i ysyxSoC/loader/hello-loader.bin --dump-wave"
+    #bash build.sh -e soc -b -s -y -v '--timescale "1ns/1ns" -Wno-fatal --trace' -a "-i ysyxSoC/loader/memtest-loader.bin --dump-wave"
+    #bash build.sh -e soc -b -s -y -v '--timescale "1ns/1ns" -Wno-fatal --trace' -a "-i ysyxSoC/loader/rtthread-loader.bin"
 elif [ $1 = "-b" ]; then
     #bash build.sh -e cpu_axi_diff -b -r "non-output/riscv-tests non-output/cpu-tests" -m "WITH_DRAMSIM3=1"
     bash build.sh -e cpu_axi_diff -b -r "non-output/riscv-tests non-output/cpu-tests-ysyx4" -m "WITH_DRAMSIM3=1"
