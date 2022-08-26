@@ -62,7 +62,7 @@ module lsu (
   //                 |REG|
   // o_pre_ready <-- ⌊____⌋ <-- i_post_ready
 
-  assign o_pre_ready =  (ldst_en & en_axi) ? (o_post_valid & i_post_ready) : (o_post_valid & i_post_ready | !o_post_valid) ;
+  assign o_pre_ready = o_post_valid & i_post_ready | !pre_valid_r ;
 
   wire pre_sh = i_pre_valid & o_pre_ready;
   wire pre_valid_r;

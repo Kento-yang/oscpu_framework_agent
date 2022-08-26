@@ -1744,9 +1744,8 @@ module ysyx_22040561_exu (
 
   logic alu_int, alu_mul, alu_div;
   logic pre_valid_r, div_end_valid, div_end_ready;
-
   wire pre_sh;
-  assign o_pre_ready =  (alu_div & pre_valid_r) ? (div_end_valid & div_end_ready): (o_post_valid & i_post_ready | !o_post_valid) ;
+  assign o_pre_ready = o_post_valid & i_post_ready | !pre_valid_r ;
   assign pre_sh = i_pre_valid & o_pre_ready;
 
   ysyx_22040561_stl_reg #(
@@ -1765,55 +1764,46 @@ module ysyx_22040561_exu (
 
  //  2. reg pre stage signals: ///////////////////////////////////////////////////////////////////////////////
 
-  logic                        idu_sysins , idu_sysins_r  ;
-  logic  [`CPU_WIDTH-1:0]      idu_imm    , idu_imm_r     ;
-  logic  [`CPU_WIDTH-1:0]      idu_csrs   , idu_csrs_r    ;
-  logic  [`CPU_WIDTH-1:0]      idu_rs1    , idu_rs1_r     ;
-  logic  [`CPU_WIDTH-1:0]      idu_rs2    , idu_rs2_r     ;
-  logic  [`EXU_SEL_WIDTH-1:0]  idu_exsrc  , idu_exsrc_r   ;
-  logic  [`EXU_OPT_WIDTH-1:0]  idu_exopt  , idu_exopt_r   ;
-  logic                        idu_excsrsrc,idu_excsrsrc_r;
-  logic  [`CSR_OPT_WIDTH-1:0]  idu_excsropt,idu_excsropt_r;
-  logic  [2:0]                 idu_lsfunc3, idu_lsfunc3_r ;
-  logic                        idu_lden   , idu_lden_r    ;
-  logic                        idu_sten   , idu_sten_r    ;
-  logic  [`REG_ADDRW-1:0]      idu_rdid   , idu_rdid_r    ;
-  logic                        idu_rdwen  , idu_rdwen_r   ;
-  logic  [`CSR_ADDRW-1:0]      idu_csrdid , idu_csrdid_r  ;
-  logic                        idu_csrdwen, idu_csrdwen_r ;
-  logic  [`CPU_WIDTH-1:0]      idu_pc     , idu_pc_r      ;
-  logic  [`INS_WIDTH-1:0]      idu_ins    , idu_ins_r     ;
-  logic                        idu_nop    , idu_nop_r     ;
+  logic                        idu_sysins_r  ;
+  logic  [`CPU_WIDTH-1:0]      idu_imm_r     ;
+  logic  [`CPU_WIDTH-1:0]      idu_csrs_r    ;
+  logic  [`CPU_WIDTH-1:0]      idu_rs1_r     ;
+  logic  [`CPU_WIDTH-1:0]      idu_rs2_r     ;
+  logic  [`EXU_SEL_WIDTH-1:0]  idu_exsrc_r   ;
+  logic  [`EXU_OPT_WIDTH-1:0]  idu_exopt_r   ;
+  logic                        idu_excsrsrc_r;
+  logic  [`CSR_OPT_WIDTH-1:0]  idu_excsropt_r;
+  logic  [2:0]                 idu_lsfunc3_r ;
+  logic                        idu_lden_r    ;
+  logic                        idu_sten_r    ;
+  logic  [`REG_ADDRW-1:0]      idu_rdid_r    ;
+  logic                        idu_rdwen_r   ;
+  logic  [`CSR_ADDRW-1:0]      idu_csrdid_r  ;
+  logic                        idu_csrdwen_r ;
+  logic  [`CPU_WIDTH-1:0]      idu_pc_r      ;
+  logic  [`INS_WIDTH-1:0]      idu_ins_r     ;
+  logic                        idu_nop_r     ;
 
-  assign idu_sysins  = i_pre_nop ?  1'b0         : i_idu_sysins  ;
-  assign idu_imm     = i_pre_nop ? `CPU_WIDTH'b0 : i_idu_imm     ;
-  assign idu_csrs    = i_pre_nop ? `CPU_WIDTH'b0 : i_idu_csrs    ;
-  assign idu_rs1     = i_pre_nop ? `CPU_WIDTH'b0 : i_idu_rs1     ;
-  assign idu_rs2     = i_pre_nop ? `CPU_WIDTH'b0 : i_idu_rs2     ;
-  assign idu_exsrc   = i_pre_nop ? `EXU_SEL_IMM  : i_idu_exsrc   ;
-  assign idu_exopt   = i_pre_nop ? `EXU_ADD      : i_idu_exopt   ;
-  assign idu_excsrsrc= i_pre_nop ? `CSR_SEL_IMM  : i_idu_excsrsrc;
-  assign idu_excsropt= i_pre_nop ? `CSR_NOP      : i_idu_excsropt;
-  assign idu_lsfunc3 = i_idu_lsfunc3 ;
-  assign idu_lden    = i_pre_nop ?  1'b0         : i_idu_lden    ;
-  assign idu_sten    = i_pre_nop ?  1'b0         : i_idu_sten    ;
-  assign idu_rdid    = i_pre_nop ? `REG_ADDRW'b0 : i_idu_rdid    ;
-  assign idu_rdwen   = i_pre_nop ?  1'b0         : i_idu_rdwen   ;
-  assign idu_csrdid  = i_pre_nop ? `CSR_ADDRW'b0 : i_idu_csrdid  ;
-  assign idu_csrdwen = i_pre_nop ?  1'b0         : i_idu_csrdwen ;
-  assign idu_pc      = i_idu_pc ;
-  assign idu_ins     = i_pre_nop ? `INS_WIDTH'b0 : i_idu_ins     ;
-  assign idu_nop     = i_pre_nop | i_idu_nop ;
+  parameter EXREG_WIDTH = 5*`CPU_WIDTH+`REG_ADDRW+10+`EXU_SEL_WIDTH+`EXU_OPT_WIDTH+`CSR_OPT_WIDTH+`CSR_ADDRW+`INS_WIDTH;
+
+  logic [EXREG_WIDTH-1:0] reg_din, reg_dout;
+
+  assign reg_din = {i_flush | i_pre_nop ? {(EXREG_WIDTH-1){1'b0}} : {i_idu_sysins, i_idu_imm, i_idu_rs1, i_idu_rs2, i_idu_csrs, i_idu_exsrc, i_idu_exopt, i_idu_excsrsrc,
+                     i_idu_excsropt, i_idu_lsfunc3, i_idu_lden, i_idu_sten, i_idu_rdid, i_idu_rdwen, i_idu_csrdid, i_idu_csrdwen, i_idu_pc, i_idu_ins},
+                    i_flush ? 1'b0 : {i_pre_nop | i_idu_nop} };
+
+  assign {idu_sysins_r, idu_imm_r, idu_rs1_r, idu_rs2_r, idu_csrs_r, idu_exsrc_r, idu_exopt_r, idu_excsrsrc_r, idu_excsropt_r, idu_lsfunc3_r,
+          idu_lden_r, idu_sten_r, idu_rdid_r, idu_rdwen_r, idu_csrdid_r, idu_csrdwen_r, idu_pc_r, idu_ins_r, idu_nop_r} = reg_dout;
 
   ysyx_22040561_stl_reg #(
-    .WIDTH      (5*`CPU_WIDTH+`REG_ADDRW+10+`EXU_SEL_WIDTH+`EXU_OPT_WIDTH+`CSR_OPT_WIDTH+`CSR_ADDRW+`INS_WIDTH),
-    .RESET_VAL  (0       )
+    .WIDTH      (EXREG_WIDTH),
+    .RESET_VAL  (0        )
   ) regs(
-  	.i_clk      (i_clk   ),
-    .i_rst_n    (i_rst_n ),
+  	.i_clk      (i_clk    ),
+    .i_rst_n    (i_rst_n  ),
     .i_wen      (i_flush | pre_sh  ),
-    .i_din      (i_flush ? 0: {idu_sysins  , idu_imm  , idu_rs1  , idu_rs2  , idu_csrs  , idu_exsrc  , idu_exopt  , idu_excsrsrc  , idu_excsropt  , idu_lsfunc3  , idu_lden  , idu_sten  , idu_rdid  , idu_rdwen  , idu_csrdid  , idu_csrdwen  , idu_pc  , idu_ins  , idu_nop  } ),
-    .o_dout     (             {idu_sysins_r, idu_imm_r, idu_rs1_r, idu_rs2_r, idu_csrs_r, idu_exsrc_r, idu_exopt_r, idu_excsrsrc_r, idu_excsropt_r, idu_lsfunc3_r, idu_lden_r, idu_sten_r, idu_rdid_r, idu_rdwen_r, idu_csrdid_r, idu_csrdwen_r, idu_pc_r, idu_ins_r, idu_nop_r} )
+    .i_din      (reg_din  ),
+    .o_dout     (reg_dout )
   );
 
   // 3. use pre stage system signals to generate comb logic for post stage://////////////////////////////////////////
@@ -2352,7 +2342,7 @@ module ysyx_22040561_lsu (
   //                 |REG|
   // o_pre_ready <-- ⌊____⌋ <-- i_post_ready
 
-  assign o_pre_ready =  (ldst_en & en_axi) ? (o_post_valid & i_post_ready) : (o_post_valid & i_post_ready | !o_post_valid) ;
+  assign o_pre_ready = o_post_valid & i_post_ready | !pre_valid_r ;
 
   wire pre_sh = i_pre_valid & o_pre_ready;
   wire pre_valid_r;
