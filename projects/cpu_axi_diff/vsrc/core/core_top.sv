@@ -420,9 +420,9 @@ module core_top(
     .i_imm        (idu_imm      ),
     .i_ifupc      (ifu_pc       ),
     .i_idupc      (idu_pc       ),
-    .i_iru_flush  (iru_flush    ),
+    .i_iru_jump   (iru_excp | iru_intr ),
     .i_iru_pc     (iru_pc       ),
-    .i_fence_flush(fence_flush  ),
+    .i_fence_jump (lsu_fencei   ),
     .i_fence_pc   (lsu_pc+4     ),
     .o_next_pc    (pre_pc       ),
     .o_ifid_nop   (ifid_nop     )

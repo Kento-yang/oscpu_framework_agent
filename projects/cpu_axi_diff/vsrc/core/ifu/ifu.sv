@@ -70,15 +70,15 @@ module ifu (
 
   logic wait_post_ready;
   stl_reg #(
-    .WIDTH      (1   ),                                   // always_ff @(posedge i_clk or negedge i_rst_n) begin
-    .RESET_VAL  (1'b0)                                    //   if(!i_rst_n)begin
-  ) unireadyreg (                                         //     wait_post_ready <= 1'b0;
-  	.i_clk      (i_clk              ),       // <==>      //   end else if(!post_sh | UniIf_Sh)begin
-    .i_rst_n    (i_rst_n            ),                    //     wait_post_ready <= 1'b1;
-    .i_wen      ( post_sh | UniIf_Sh),                    //   end else if(post_sh)begin
-    .i_din      (!post_sh & UniIf_Sh),                    //     wait_post_ready <= 1'b0;
-    .o_dout     (wait_post_ready    )                     //   end
-  );                                                      // end
+    .WIDTH      (1   ),                                       //  always_ff @(posedge i_clk or negedge i_rst_n) begin
+    .RESET_VAL  (1'b0)                                        //    if(!i_rst_n)begin
+  ) unireadyreg (                                             //      wait_post_ready <= 1'b0;
+  	.i_clk      (i_clk                ),            // <==>   //    end else if(i_flush | post_sh)begin
+    .i_rst_n    (i_rst_n              ),                      //      wait_post_ready <= 1'b0;
+    .i_wen      (i_flush | post_sh | UniIf_Sh),               //    end else if(UniIf_Sh)begin
+    .i_din      (!(i_flush | post_sh) ),                      //      wait_post_ready <= 1'b1;
+    .o_dout     (wait_post_ready      )                       //    end
+  );                                                          //  end
 
   // 4. use pre stage signals to generate comb logic for post stage://////////////////////////////////////////
 
