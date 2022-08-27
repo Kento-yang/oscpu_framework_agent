@@ -1,9 +1,11 @@
 `include "defines.sv"
 module core_top(
-  input                 i_clk       ,
-  input                 i_rst_n     ,
-  uni_if.Master         iCacheIf_M  ,
-  uni_if.Master         dCacheIf_M  ,
+  input                 i_clk         ,
+  input                 i_rst_n       ,
+  uni_if.Master         iCacheIf_M    ,
+  uni_if.Master         dCacheIf_M    ,
+  output                o_invalidIChe ,
+  output                o_cleanDChe   ,
   output                s_uart_out_valid,
   output [7:0]          s_uart_out_char
 );
@@ -26,11 +28,22 @@ module core_top(
   logic                   wbu_valid , wbu_ready;  // pipeline shakehands: ls/wb -> wb/reg.
   logic                   iru_excp  , iru_intr;
   logic                   wbu_commit;             // wbu_valid & wbu_ready & !iru_intr.
-  logic                   unif_trans_done, flush;
+  logic                   unif_trans_done, iru_flush, fence_flush;
+  logic                   ifu_flush, idu_flush, exu_flush, lsu_flush, wbu_flush;
 
   assign unif_trans_done = (iCacheIf_M.valid & iCacheIf_M.ready | !iCacheIf_M.valid);
   assign wbu_ready = (iru_excp | iru_intr) ? unif_trans_done: 1'b1;         // if excp/intr, waiting for unif done.
-  assign flush     = (iru_excp | iru_intr) & (wbu_valid & wbu_ready);       // iru_intr not commit.
+  assign iru_flush = (iru_excp | iru_intr) & (wbu_valid & wbu_ready);       // iru_intr not commit.
+
+  assign fence_flush = dCacheIf_M.valid & dCacheIf_M.ready & lsu_fencei;
+  assign ifu_flush = fence_flush | iru_flush;
+  assign idu_flush = fence_flush | iru_flush;
+  assign exu_flush = fence_flush | iru_flush;
+  assign lsu_flush = fence_flush | iru_flush;
+  assign wbu_flush = iru_flush;
+
+  assign o_cleanDChe = lsu_fencei;
+  assign o_invalidIChe = fence_flush;
 
   // simulation signals:
   logic [2:0]             s_id_err ;
@@ -44,7 +57,7 @@ module core_top(
     .i_clk        (i_clk      ),
     .i_rst_n      (i_rst_n    ),
     .iCacheIf_M   (iCacheIf_M ),
-    .i_flush      (flush      ),
+    .i_flush      (ifu_flush  ),
     .o_post_valid (ifu_valid  ),
     .i_post_ready (ifu_ready  ),
     .i_next_pc    (pre_pc     ),
@@ -55,23 +68,24 @@ module core_top(
   // 2.2 idu ////////////////////////////////////////////////////////
 
   // for bypass to get reg value.
-  logic [`REG_ADDRW-1:0]      idu_rs1id,idu_rs2id;
-  logic [`CSR_ADDRW-1:0]      idu_csrsid ;
-  logic                       idu_csrsren;
+  logic [`REG_ADDRW-1:0]      idu_rs1id, idu_rs2id;
+  logic [`CSR_ADDRW-1:0]      idu_csrsid  ;
+  logic                       idu_csrsren ;
   // get rs value from bypass: 
-  logic [`CPU_WIDTH-1:0]      idu_rs1,idu_rs2;
-  logic [`CPU_WIDTH-1:0]      idu_csrs;
+  logic [`CPU_WIDTH-1:0]      idu_rs1, idu_rs2;
+  logic [`CPU_WIDTH-1:0]      idu_csrs    ;
   // for exu:
-  logic                       idu_sysins;
-  logic [`CPU_WIDTH-1:0]      idu_imm;
-  logic [`EXU_SEL_WIDTH-1:0]  idu_exsrc;
-  logic [`EXU_OPT_WIDTH-1:0]  idu_exopt;
+  logic                       idu_sysins  ;
+  logic [`CPU_WIDTH-1:0]      idu_imm     ;
+  logic [`EXU_SEL_WIDTH-1:0]  idu_exsrc   ;
+  logic [`EXU_OPT_WIDTH-1:0]  idu_exopt   ;
   logic                       idu_excsrsrc;
   logic [`CSR_OPT_WIDTH-1:0]  idu_excsropt;
   // for lsu:
-  logic [2:0]                 idu_lsfunc3;
-  logic                       idu_lden;
-  logic                       idu_sten;
+  logic [2:0]                 idu_lsfunc3 ;
+  logic                       idu_lden    ;
+  logic                       idu_sten    ;
+  logic                       idu_fencei  ;
   // for wbu:
   logic [`REG_ADDRW-1:0]      idu_rdid    ;
   logic                       idu_rdwen   ;
@@ -85,7 +99,7 @@ module core_top(
   idu u_idu(
     .i_clk          (i_clk        ),
     .i_rst_n        (i_rst_n      ),
-    .i_flush        (flush        ),
+    .i_flush        (idu_flush    ),
     .i_pre_nop      (ifid_nop     ),
     .i_pre_stall    (ifid_stall   ),
     .i_pre_valid    (ifu_valid    ),
@@ -107,6 +121,7 @@ module core_top(
     .o_idu_lsfunc3  (idu_lsfunc3  ),
     .o_idu_lden     (idu_lden     ),
     .o_idu_sten     (idu_sten     ),
+    .o_idu_fencei   (idu_fencei   ),
     .o_idu_rdid     (idu_rdid     ),
     .o_idu_rdwen    (idu_rdwen    ),
     .o_idu_csrdid   (idu_csrdid   ),
@@ -128,6 +143,7 @@ module core_top(
   // for lsu:
   logic                       exu_lden    ; // for lsu load en.
   logic                       exu_sten    ; // for lsu store en.
+  logic                       exu_fencei  ; // for lsu fence.i.
   logic [`CPU_WIDTH-1:0]      exu_rs2     ; // for lsu data.
   logic [2:0]                 exu_lsfunc3 ; // for lsu func3
   // for wbu:
@@ -140,7 +156,7 @@ module core_top(
   exu u_exu(
     .i_clk          (i_clk          ),
     .i_rst_n        (i_rst_n        ),
-    .i_flush        (flush          ),
+    .i_flush        (exu_flush      ),
     .i_pre_nop      (idex_nop       ),
     .i_pre_valid    (idu_valid      ),
     .o_pre_ready    (idu_ready      ),
@@ -158,6 +174,7 @@ module core_top(
     .i_idu_lsfunc3  (idu_lsfunc3    ),
     .i_idu_lden     (idu_lden       ),
     .i_idu_sten     (idu_sten       ),
+    .i_idu_fencei   (idu_fencei     ),
     .i_idu_rdid     (idu_rdid       ),
     .i_idu_rdwen    (idu_rdwen      ),
     .i_idu_csrdid   (idu_csrdid     ),
@@ -169,6 +186,7 @@ module core_top(
     .o_exu_lsfunc3  (exu_lsfunc3    ),
     .o_exu_lden     (exu_lden       ),
     .o_exu_sten     (exu_sten       ),
+    .o_exu_fencei   (exu_fencei     ),
     .o_exu_rdid     (exu_rdid       ),
     .o_exu_rdwen    (exu_rdwen      ),
     .o_exu_res      (exu_exres      ),
@@ -185,6 +203,7 @@ module core_top(
   logic [`CPU_WIDTH-1:0]      lsu_exres  ;
   logic [`CPU_WIDTH-1:0]      lsu_lsres  ;
   logic                       lsu_lden   ;
+  logic                       lsu_fencei ;
   logic [`REG_ADDRW-1:0]      lsu_rdid   ;
   logic                       lsu_rdwen  ;
   logic [`CSR_ADDRW-1:0]      lsu_csrdid ;
@@ -194,7 +213,7 @@ module core_top(
   lsu u_lsu(
     .i_clk         (i_clk         ),
     .i_rst_n       (i_rst_n       ),
-    .i_flush       (flush         ),
+    .i_flush       (lsu_flush     ),
     .dCacheIf_M    (dCacheIf_M    ),
     .i_pre_valid   (exu_valid     ),
     .o_pre_ready   (exu_ready     ),
@@ -205,6 +224,7 @@ module core_top(
     .i_exu_lsfunc3 (exu_lsfunc3   ),
     .i_exu_lden    (exu_lden      ),
     .i_exu_sten    (exu_sten      ),
+    .i_exu_fencei  (exu_fencei    ),
     .i_exu_rdid    (exu_rdid      ),
     .i_exu_rdwen   (exu_rdwen     ),
     .i_exu_csrdid  (exu_csrdid    ),
@@ -224,6 +244,7 @@ module core_top(
     .o_lsu_lsres   (lsu_lsres     ),
     .o_lsu_exres   (lsu_exres     ),
     .o_lsu_lden    (lsu_lden      ),
+    .o_lsu_fencei  (lsu_fencei    ),
     .o_lsu_rdid    (lsu_rdid      ),
     .o_lsu_rdwen   (lsu_rdwen     ),
     .o_lsu_csrdid  (lsu_csrdid    ),
@@ -247,7 +268,7 @@ module core_top(
   wbu u_wbu(
     .i_clk         (i_clk        ),
     .i_rst_n       (i_rst_n      ),
-    .i_flush       (flush        ),
+    .i_flush       (wbu_flush    ),
     .i_pre_valid   (lsu_valid    ),
     .o_pre_ready   (lsu_ready    ),
     .o_post_valid  (wbu_valid    ),
@@ -385,24 +406,26 @@ module core_top(
   // 2.7 bru ///////////////////////////////////////////////
 
   bru u_bru(
-    .i_clk       (i_clk        ),
-    .i_rst_n     (i_rst_n      ),
-    .i_idu_valid (idu_valid    ),
-    .i_idu_rs1id (idu_rs1id    ),
-    .i_exu_rdid  (exu_rdid     ),
-    .i_jal       (idu_jal      ),
-    .i_jalr      (idu_jalr     ),
-    .i_brch      (idu_brch     ),
-    .i_bfun3     (idu_bfun3    ),
-    .i_rs1       (idu_rs1      ),
-    .i_rs2       (idu_rs2      ),
-    .i_imm       (idu_imm      ),
-    .i_ifupc     (ifu_pc       ),
-    .i_idupc     (idu_pc       ),
-    .i_iru_flush (flush        ),
-    .i_iru_pc    (iru_pc       ),
-    .o_next_pc   (pre_pc       ),
-    .o_ifid_nop  (ifid_nop     )
+    .i_clk        (i_clk        ),
+    .i_rst_n      (i_rst_n      ),
+    .i_idu_valid  (idu_valid    ),
+    .i_idu_rs1id  (idu_rs1id    ),
+    .i_exu_rdid   (exu_rdid     ),
+    .i_jal        (idu_jal      ),
+    .i_jalr       (idu_jalr     ),
+    .i_brch       (idu_brch     ),
+    .i_bfun3      (idu_bfun3    ),
+    .i_rs1        (idu_rs1      ),
+    .i_rs2        (idu_rs2      ),
+    .i_imm        (idu_imm      ),
+    .i_ifupc      (ifu_pc       ),
+    .i_idupc      (idu_pc       ),
+    .i_iru_flush  (iru_flush    ),
+    .i_iru_pc     (iru_pc       ),
+    .i_fence_flush(fence_flush  ),
+    .i_fence_pc   (lsu_pc+4     ),
+    .o_next_pc    (pre_pc       ),
+    .o_ifid_nop   (ifid_nop     )
   );
 
   // 3.difftest: ///////////////////////////////////////////////////////////////////////////////////////////////

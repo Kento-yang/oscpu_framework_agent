@@ -1,7 +1,8 @@
 `include "defines.sv"
-module iCache_intern (
+module iCache (
   input                       i_clk     ,
   input                       i_rst_n   ,
+  input                       i_invalid ,
   uni_if.Slave                iCacheIf_S,  //  32 bit width
   uni_if.Master               iMemIf_M     // 128 bit width
 );
@@ -35,15 +36,16 @@ module iCache_intern (
   logic [127:0]          dary_rdata [1:0];
 
   for (genvar i=0; i<2 ; i=i+1) begin
-    tag_ary #(
+    iCache_tag_ary #(
       .DATA_WIDTH (`iTARY_W)
     ) u_tag_ary(
-      .i_clk   (i_clk         ),
-      .i_rst_n (i_rst_n       ),
-      .i_wen   (tary_wen  [i] ),
-      .i_addr  (index         ),
-      .i_din   (tary_wdata[i] ),
-      .o_dout  (tary_rdata[i] )
+      .i_clk    (i_clk        ),
+      .i_rst_n  (i_rst_n      ),
+      .i_invalid(i_invalid    ),
+      .i_wen    (tary_wen  [i]),
+      .i_addr   (index        ),
+      .i_din    (tary_wdata[i]),
+      .o_dout   (tary_rdata[i])
     );
     data_ary u_data_ary(
       .i_clk   (i_clk         ),

@@ -32,6 +32,7 @@ module idu (
   output logic [2:0]                o_idu_lsfunc3 ,
   output logic                      o_idu_lden    ,
   output logic                      o_idu_sten    ,
+  output logic                      o_idu_fencei  ,
   // 3.4 for exu, dealy to use for wbu:
   output logic [`REG_ADDRW-1:0]     o_idu_rdid    ,
   output logic                      o_idu_rdwen   ,
@@ -150,8 +151,12 @@ module idu (
     .o_csrdid    (sys_csrdid    ),
     .o_csrdwen   (sys_csrdwen   )
   );
-  
-  assign o_idu_sysins  = (ifu_ins_r[6: 0] == `TYPE_SYS);
+
+  wire [2:0] func3  = ifu_ins_r[14:12];
+  wire [6:0] opcode = ifu_ins_r[ 6: 0];
+
+  assign o_idu_sysins  = (opcode == `TYPE_SYS);
+  assign o_idu_fencei  = (opcode == `TYPE_FENCE) & (func3 == 3'b001);
 
   assign o_idu_rs1id    = o_idu_sysins ? sys_rs1id      : nom_rs1id     ;
   assign o_idu_rs2id    = o_idu_sysins ? `REG_ADDRW'b0  : nom_rs2id     ;

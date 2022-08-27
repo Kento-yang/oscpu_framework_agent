@@ -1,7 +1,8 @@
 `include "defines.sv"
-module iCache (
+module iCache_wrapper (
   input                       i_clk     ,
   input                       i_rst_n   ,
+  input                       i_invalid ,
   uni_if.Slave                iCacheIf_S,  //  32 bit width
   uni_if.Master               iMemIf_M     // 128 bit width
 );
@@ -35,9 +36,10 @@ module iCache (
   assign iCachableMemIf.ready      = iMemIf_M.ready & cachable;
   assign iCachableMemIf.rdata      = iMemIf_M.rdata;
 
-  iCache_intern u_iCache_intern(
+  iCache u_iCache(
     .i_clk      (i_clk            ),
     .i_rst_n    (i_rst_n          ),
+    .i_invalid  (i_invalid        ),
     .iCacheIf_S (iCachableCacheIf ),
     .iMemIf_M   (iCachableMemIf   )
   );

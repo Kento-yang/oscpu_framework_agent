@@ -18,6 +18,7 @@ module lsu (
   input  logic  [2:0]             i_exu_lsfunc3 ,
   input  logic                    i_exu_lden    ,
   input  logic                    i_exu_sten    ,
+  input  logic                    i_exu_fencei  ,
   input  logic  [`REG_ADDRW-1:0]  i_exu_rdid    ,
   input  logic                    i_exu_rdwen   ,
   input  logic  [`CSR_ADDRW-1:0]  i_exu_csrdid  ,
@@ -43,6 +44,7 @@ module lsu (
   output logic  [`CPU_WIDTH-1:0]  o_lsu_lsres   ,
   output logic  [`CPU_WIDTH-1:0]  o_lsu_exres   ,
   output logic                    o_lsu_lden    ,
+  output logic                    o_lsu_fencei  ,
   output logic  [`REG_ADDRW-1:0]  o_lsu_rdid    ,
   output logic                    o_lsu_rdwen   ,
   output logic  [`CSR_ADDRW-1:0]  o_lsu_csrdid  ,
@@ -78,13 +80,14 @@ module lsu (
     .o_dout     (pre_valid_r )
   );
 
-  assign o_post_valid   = (ldst_en & en_axi) ? dCacheIf_M.ready : pre_valid_r;
+  assign o_post_valid   = (exu_fencei_r | ldst_en & en_axi) ? dCacheIf_M.ready : pre_valid_r;
 
   logic  [`CPU_WIDTH-1:0]  exu_exres_r    ;
   logic  [`CPU_WIDTH-1:0]  exu_rs2_r      ;
   logic  [2:0]             exu_lsfunc3_r  ;
   logic                    exu_lden_r     ;
   logic                    exu_sten_r     ;
+  logic                    exu_fencei_r   ;
   logic  [`REG_ADDRW-1:0]  exu_rdid_r     ;
   logic                    exu_rdwen_r    ;
   logic  [`CSR_ADDRW-1:0]  exu_csrdid_r   ;
@@ -95,14 +98,14 @@ module lsu (
   logic                    exu_nop_r      ;
   
   stl_reg #(
-    .WIDTH      (4*`CPU_WIDTH+`REG_ADDRW+`CSR_ADDRW+7+`INS_WIDTH+1),
+    .WIDTH      (4*`CPU_WIDTH+`REG_ADDRW+`CSR_ADDRW+7+`INS_WIDTH+2),
     .RESET_VAL  (0       )
   ) prereg (
   	.i_clk      (i_clk   ),
     .i_rst_n    (i_rst_n ),
     .i_wen      (i_flush | pre_sh ),
-    .i_din      (i_flush ? 0: {i_exu_exres, i_exu_rs2, i_exu_lsfunc3, i_exu_lden, i_exu_sten, i_exu_rdid, i_exu_rdwen, i_exu_csrdid, i_exu_csrdwen, i_exu_csrd, i_exu_pc, i_exu_ins, i_exu_nop} ),
-    .o_dout     (             {exu_exres_r, exu_rs2_r, exu_lsfunc3_r, exu_lden_r, exu_sten_r, exu_rdid_r, exu_rdwen_r, exu_csrdid_r, exu_csrdwen_r, exu_csrd_r, exu_pc_r, exu_ins_r, exu_nop_r} )
+    .i_din      (i_flush ? 0: {i_exu_exres, i_exu_rs2, i_exu_lsfunc3, i_exu_lden, i_exu_sten, i_exu_rdid, i_exu_rdwen, i_exu_fencei, i_exu_csrdid, i_exu_csrdwen, i_exu_csrd, i_exu_pc, i_exu_ins, i_exu_nop} ),
+    .o_dout     (             {exu_exres_r, exu_rs2_r, exu_lsfunc3_r, exu_lden_r, exu_sten_r, exu_rdid_r, exu_rdwen_r, exu_fencei_r, exu_csrdid_r, exu_csrdwen_r, exu_csrd_r, exu_pc_r, exu_ins_r, exu_nop_r} )
   );
 
   // 2. deal with device :///////////////////////////////////////////////////////////////////////////////////////
@@ -127,8 +130,8 @@ module lsu (
 
   // 4. use interface to read/write, generate valid signals for post stage:////////////////////////////////////
 
-  assign dCacheIf_M.valid  = en_axi & ldst_en & ~(i_iru_excp | i_iru_intr);
-  assign dCacheIf_M.reqtyp = stor_en           ; 
+  assign dCacheIf_M.valid  = (exu_fencei_r | en_axi & ldst_en) & ~(i_iru_excp | i_iru_intr);
+  assign dCacheIf_M.reqtyp = stor_en           ;
   assign dCacheIf_M.addr   = lsu_addr          ;
   assign dCacheIf_M.wdata  = exu_rs2_r         ;
   assign dCacheIf_M.size   = exu_lsfunc3_r[1:0];
@@ -172,6 +175,7 @@ module lsu (
   assign o_lsu_lsres   = en_clint ? i_clint_rdata : dCache_rdata;
   assign o_lsu_exres   = exu_exres_r  ;
   assign o_lsu_lden    = exu_lden_r   ;
+  assign o_lsu_fencei  = exu_fencei_r ;
   assign o_lsu_rdid    = exu_rdid_r   ;
   assign o_lsu_rdwen   = exu_rdwen_r  ;
   assign o_lsu_csrdid  = exu_csrdid_r ;

@@ -25,6 +25,7 @@ module exu (
   input  logic  [2:0]                i_idu_lsfunc3 ,
   input  logic                       i_idu_lden    ,
   input  logic                       i_idu_sten    ,
+  input  logic                       i_idu_fencei  ,
   // 2.3 dealy for wbu:
   input  logic  [`REG_ADDRW-1:0]     i_idu_rdid    ,
   input  logic                       i_idu_rdwen   ,
@@ -41,6 +42,7 @@ module exu (
   output logic  [2:0]                o_exu_lsfunc3 ,
   output logic                       o_exu_lden    ,
   output logic                       o_exu_sten    ,
+  output logic                       o_exu_fencei  ,
   // 3.2 for lsu, dealy to use for wbu:
   output logic  [`REG_ADDRW-1:0]     o_exu_rdid    ,
   output logic                       o_exu_rdwen   ,
@@ -101,6 +103,7 @@ module exu (
   logic  [2:0]                 idu_lsfunc3_r ;
   logic                        idu_lden_r    ;
   logic                        idu_sten_r    ;
+  logic                        idu_fencei_r  ;
   logic  [`REG_ADDRW-1:0]      idu_rdid_r    ;
   logic                        idu_rdwen_r   ;
   logic  [`CSR_ADDRW-1:0]      idu_csrdid_r  ;
@@ -109,16 +112,16 @@ module exu (
   logic  [`INS_WIDTH-1:0]      idu_ins_r     ;
   logic                        idu_nop_r     ;
 
-  parameter EXREG_WIDTH = 5*`CPU_WIDTH+`REG_ADDRW+10+`EXU_SEL_WIDTH+`EXU_OPT_WIDTH+`CSR_OPT_WIDTH+`CSR_ADDRW+`INS_WIDTH;
+  parameter EXREG_WIDTH = 5*`CPU_WIDTH+`REG_ADDRW+11+`EXU_SEL_WIDTH+`EXU_OPT_WIDTH+`CSR_OPT_WIDTH+`CSR_ADDRW+`INS_WIDTH;
 
   logic [EXREG_WIDTH-1:0] reg_din, reg_dout;
 
   assign reg_din = {i_flush | i_pre_nop ? {(EXREG_WIDTH-1){1'b0}} : {i_idu_sysins, i_idu_imm, i_idu_rs1, i_idu_rs2, i_idu_csrs, i_idu_exsrc, i_idu_exopt, i_idu_excsrsrc,
-                     i_idu_excsropt, i_idu_lsfunc3, i_idu_lden, i_idu_sten, i_idu_rdid, i_idu_rdwen, i_idu_csrdid, i_idu_csrdwen, i_idu_pc, i_idu_ins},
+                     i_idu_excsropt, i_idu_lsfunc3, i_idu_lden, i_idu_sten, i_idu_fencei, i_idu_rdid, i_idu_rdwen, i_idu_csrdid, i_idu_csrdwen, i_idu_pc, i_idu_ins},
                     i_flush ? 1'b0 : {i_pre_nop | i_idu_nop} };
 
   assign {idu_sysins_r, idu_imm_r, idu_rs1_r, idu_rs2_r, idu_csrs_r, idu_exsrc_r, idu_exopt_r, idu_excsrsrc_r, idu_excsropt_r, idu_lsfunc3_r,
-          idu_lden_r, idu_sten_r, idu_rdid_r, idu_rdwen_r, idu_csrdid_r, idu_csrdwen_r, idu_pc_r, idu_ins_r, idu_nop_r} = reg_dout;
+          idu_lden_r, idu_sten_r, idu_fencei_r, idu_rdid_r, idu_rdwen_r, idu_csrdid_r, idu_csrdwen_r, idu_pc_r, idu_ins_r, idu_nop_r} = reg_dout;
 
   stl_reg #(
     .WIDTH      (EXREG_WIDTH),
@@ -272,11 +275,12 @@ module exu (
   end
 
   // 5. select output result: ////////////////////////////////////////////////////////////////////////////////////////
-  
+
   assign o_exu_rs2     = idu_rs2_r    ;
   assign o_exu_lsfunc3 = idu_lsfunc3_r;
   assign o_exu_lden    = idu_lden_r   ;
   assign o_exu_sten    = idu_sten_r   ;
+  assign o_exu_fencei  = idu_fencei_r ;
   assign o_exu_rdid    = idu_rdid_r   ;
   assign o_exu_rdwen   = idu_rdwen_r  ;
   assign o_exu_res     = idu_sysins_r ? sys_rdres :

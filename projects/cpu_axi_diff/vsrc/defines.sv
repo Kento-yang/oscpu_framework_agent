@@ -37,7 +37,8 @@
 `define TYPE_U_LUI      7'b0110111  //  U type for lui
 `define TYPE_U_AUIPC    7'b0010111  //  U type for auipc
 `define TYPE_J          7'b1101111  //  J type for jal
-`define TYPE_SYS        7'b1110011  //SYS type for ecall/ebreak/csrrw/csrrs/csrrc
+`define TYPE_SYS        7'b1110011  //  SYS type for ecall/ebreak/csrrw/csrrs/csrrc
+`define TYPE_FENCE      7'b0001111  //  FENCE type for fence.i
 
 // function3:
 `define FUNC3_ADD_SUB_MUL       3'b000        //ADDI ADDIW ADD ADDW SUB SUBW MUL MULW

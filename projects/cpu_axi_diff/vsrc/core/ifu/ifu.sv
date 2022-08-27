@@ -43,16 +43,47 @@ module ifu (
   // |REG|              |UNIF|          | 
   // ⌊____⌋    --> valid ⌊____⌋           | <-- i_post_ready
 
-  assign iCacheIf_M.valid  = 1'b1         ;
+  assign iCacheIf_M.valid  = !wait_post_ready ;
   assign iCacheIf_M.size   = 2'b10        ; // 32 bit.
   assign iCacheIf_M.reqtyp = `REQ_READ    ;
   assign iCacheIf_M.wdata  = `INS_WIDTH'b0; // no use.
   assign iCacheIf_M.addr   = next_pc_r[`ADR_WIDTH-1:0];
 
-  // 3. use pre stage signals to generate comb logic for post stage://////////////////////////////////////////
+  // 3. use one register to save data/valid for post stage :///////////////////
 
-  assign o_post_valid = iCacheIf_M.valid & iCacheIf_M.ready;
+  wire UniIf_Sh = iCacheIf_M.valid & iCacheIf_M.ready;
+
+  logic [`INS_WIDTH-1:0] unif_rdata, unif_rdata_r;
+
+  assign unif_rdata = iCacheIf_M.rdata[`INS_WIDTH-1:0];
+
+  stl_reg #(
+    .WIDTH      (`INS_WIDTH   ),
+    .RESET_VAL  (`INS_WIDTH'b0)
+  ) unidatareg (
+  	.i_clk      (i_clk        ),
+    .i_rst_n    (i_rst_n      ),
+    .i_wen      (UniIf_Sh     ),
+    .i_din      (unif_rdata   ),
+    .o_dout     (unif_rdata_r )
+  );
+
+  logic wait_post_ready;
+  stl_reg #(
+    .WIDTH      (1   ),                                   // always_ff @(posedge i_clk or negedge i_rst_n) begin
+    .RESET_VAL  (1'b0)                                    //   if(!i_rst_n)begin
+  ) unireadyreg (                                         //     wait_post_ready <= 1'b0;
+  	.i_clk      (i_clk              ),       // <==>      //   end else if(!post_sh | UniIf_Sh)begin
+    .i_rst_n    (i_rst_n            ),                    //     wait_post_ready <= 1'b1;
+    .i_wen      ( post_sh | UniIf_Sh),                    //   end else if(post_sh)begin
+    .i_din      (!post_sh & UniIf_Sh),                    //     wait_post_ready <= 1'b0;
+    .o_dout     (wait_post_ready    )                     //   end
+  );                                                      // end
+
+  // 4. use pre stage signals to generate comb logic for post stage://////////////////////////////////////////
+
+  assign o_post_valid = UniIf_Sh | wait_post_ready; 
   assign o_ifu_pc     = next_pc_r;
-  assign o_ifu_ins    = iCacheIf_M.rdata[`INS_WIDTH-1:0];
+  assign o_ifu_ins    = UniIf_Sh ? unif_rdata : unif_rdata_r;
 
 endmodule

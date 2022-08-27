@@ -64,6 +64,7 @@ module top(
   );
 
   // 2.cpu core:///////////////////////////////////////////////////
+  logic invalidIChe, cleanDChe;
   uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(`INS_WIDTH)) iCacheIf();  // 32bit, ins.
   uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(`CPU_WIDTH)) dCacheIf();  // 64bit, data.
 
@@ -72,6 +73,8 @@ module top(
     .i_rst_n          (i_rst_n          ),
     .iCacheIf_M       (iCacheIf         ),
     .dCacheIf_M       (dCacheIf         ),
+    .o_invalidIChe    (invalidIChe      ),
+    .o_cleanDChe      (cleanDChe        ),
     .s_uart_out_valid (s_uart_out_valid ),
     .s_uart_out_char  (s_uart_out_char  )
   );
@@ -80,16 +83,18 @@ module top(
   uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(128)) dMemIf();
   uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(128)) iMemIf();
 
-  iCache u_iCache(
-    .i_clk      (i_clk      ),
-    .i_rst_n    (i_rst_n    ),
-    .iCacheIf_S (iCacheIf   ),
-    .iMemIf_M   (iMemIf     )
+  iCache_wrapper u_iCache_wrapper(
+    .i_clk      (i_clk        ),
+    .i_rst_n    (i_rst_n      ),
+    .i_invalid  (invalidIChe  ),
+    .iCacheIf_S (iCacheIf     ),
+    .iMemIf_M   (iMemIf       )
   );
 
-  dCache u_dCache(
+  dCache_wrapper u_dCache_wrapper(
     .i_clk      (i_clk      ),
     .i_rst_n    (i_rst_n    ),
+    .i_clean    (cleanDChe  ),
     .dCacheIf_S (dCacheIf   ),
     .dMemIf_M   (dMemIf     )
   );

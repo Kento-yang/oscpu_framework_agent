@@ -1,7 +1,8 @@
 `include "defines.sv"
-module dCache (
+module dCache_wrapper (
   input                       i_clk     ,
   input                       i_rst_n   ,
+  input                       i_clean   ,
   uni_if.Slave                dCacheIf_S,  //  64 bit width
   uni_if.Master               dMemIf_M     // 128 bit width
 );
@@ -19,9 +20,9 @@ module dCache (
 */
 
   // in this module, choose cachable memory, or uncachable device.
-  // only cachable interface can read iCache, otherwise dCacheIf_S connect dMemIf_M directly.
+  // only cachable interface can read dCache, otherwise dCacheIf_S connect dMemIf_M directly.
 
-  wire cachable = dCacheIf_S.addr[31];
+  wire cachable = dCacheIf_S.addr[31] | i_clean;
 
   uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(`CPU_WIDTH)) dCachableCacheIf();
   uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(128)) dCachableMemIf();
@@ -35,9 +36,10 @@ module dCache (
   assign dCachableMemIf.ready      = dMemIf_M.ready & cachable;
   assign dCachableMemIf.rdata      = dMemIf_M.rdata;
 
-  dCache_intern u_dCache_intern(
+  dCache u_dCache(
     .i_clk      (i_clk            ),
     .i_rst_n    (i_rst_n          ),
+    .i_clean    (i_clean          ),
     .dCacheIf_S (dCachableCacheIf ),
     .dMemIf_M   (dCachableMemIf   )
   );

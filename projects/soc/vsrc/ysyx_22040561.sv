@@ -37,7 +37,8 @@
 `define TYPE_U_LUI      7'b0110111  //  U type for lui
 `define TYPE_U_AUIPC    7'b0010111  //  U type for auipc
 `define TYPE_J          7'b1101111  //  J type for jal
-`define TYPE_SYS        7'b1110011  //SYS type for ecall/ebreak/csrrw/csrrs/csrrc
+`define TYPE_SYS        7'b1110011  //  SYS type for ecall/ebreak/csrrw/csrrs/csrrc
+`define TYPE_FENCE      7'b0001111  //  FENCE type for fence.i
 
 // function3:
 `define FUNC3_ADD_SUB_MUL       3'b000        //ADDI ADDIW ADD ADDW SUB SUBW MUL MULW
@@ -612,6 +613,7 @@ module ysyx_22040561_top(
   );
 
   // 2.cpu core:///////////////////////////////////////////////////
+  logic invalidIChe, cleanDChe;
   ysyx_22040561_uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(`INS_WIDTH)) iCacheIf();  // 32bit, ins.
   ysyx_22040561_uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(`CPU_WIDTH)) dCacheIf();  // 64bit, data.
 
@@ -619,23 +621,27 @@ module ysyx_22040561_top(
     .i_clk            (i_clk            ),
     .i_rst_n          (i_rst_n          ),
     .iCacheIf_M       (iCacheIf         ),
-    .dCacheIf_M       (dCacheIf         )
+    .dCacheIf_M       (dCacheIf         ),
+    .o_invalidIChe    (invalidIChe      ),
+    .o_cleanDChe      (cleanDChe        )
   );
 
   // 3.cache: /////////////////////////////////////////////////////
   ysyx_22040561_uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(128)) dMemIf();
   ysyx_22040561_uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(128)) iMemIf();
 
-  ysyx_22040561_iCache u_iCache(
+  ysyx_22040561_iCache_wrapper u_iCache_wrapper(
     .i_clk      (i_clk      ),
     .i_rst_n    (i_rst_n    ),
+    .i_invalid  (invalidIChe  ),
     .iCacheIf_S (iCacheIf   ),
     .iMemIf_M   (iMemIf     )
   );
 
-  ysyx_22040561_dCache u_dCache(
+  ysyx_22040561_dCache_wrapper u_dCache_wrapper(
     .i_clk      (i_clk      ),
     .i_rst_n    (i_rst_n    ),
+    .i_clean    (cleanDChe  ),
     .dCacheIf_S (dCacheIf   ),
     .dMemIf_M   (dMemIf     )
   );
@@ -864,10 +870,12 @@ endmodule
 
 
 module ysyx_22040561_core_top(
-  input                 i_clk       ,
-  input                 i_rst_n     ,
-  ysyx_22040561_uni_if.Master         iCacheIf_M  ,
-  ysyx_22040561_uni_if.Master         dCacheIf_M
+  input                       i_clk         ,
+  input                       i_rst_n       ,
+  ysyx_22040561_uni_if.Master iCacheIf_M    ,
+  ysyx_22040561_uni_if.Master dCacheIf_M    ,
+  output                      o_invalidIChe ,
+  output                      o_cleanDChe
 );
 
   // control signals:
@@ -888,11 +896,22 @@ module ysyx_22040561_core_top(
   logic                   wbu_valid , wbu_ready;  // pipeline shakehands: ls/wb -> wb/reg.
   logic                   iru_excp  , iru_intr;
   logic                   wbu_commit;             // wbu_valid & wbu_ready & !iru_intr.
-  logic                   unif_trans_done, flush;
+  logic                   unif_trans_done, iru_flush, fence_flush;
+  logic                   ifu_flush, idu_flush, exu_flush, lsu_flush, wbu_flush;
 
   assign unif_trans_done = (iCacheIf_M.valid & iCacheIf_M.ready | !iCacheIf_M.valid);
   assign wbu_ready = (iru_excp | iru_intr) ? unif_trans_done: 1'b1;         // if excp/intr, waiting for unif done.
-  assign flush     = (iru_excp | iru_intr) & (wbu_valid & wbu_ready);       // iru_intr not commit.
+  assign iru_flush = (iru_excp | iru_intr) & (wbu_valid & wbu_ready);       // iru_intr not commit.
+
+  assign fence_flush = dCacheIf_M.valid & dCacheIf_M.ready & lsu_fencei;
+  assign ifu_flush = fence_flush | iru_flush;
+  assign idu_flush = fence_flush | iru_flush;
+  assign exu_flush = fence_flush | iru_flush;
+  assign lsu_flush = fence_flush | iru_flush;
+  assign wbu_flush = iru_flush;
+
+  assign o_cleanDChe = lsu_fencei;
+  assign o_invalidIChe = fence_flush;
 
   // 2.1 ifu ////////////////////////////////////////////////////////
 
@@ -900,7 +919,7 @@ module ysyx_22040561_core_top(
     .i_clk        (i_clk      ),
     .i_rst_n      (i_rst_n    ),
     .iCacheIf_M   (iCacheIf_M ),
-    .i_flush      (flush      ),
+    .i_flush      (ifu_flush  ),
     .o_post_valid (ifu_valid  ),
     .i_post_ready (ifu_ready  ),
     .i_next_pc    (pre_pc     ),
@@ -911,23 +930,24 @@ module ysyx_22040561_core_top(
   // 2.2 idu ////////////////////////////////////////////////////////
 
   // for bypass to get reg value.
-  logic [`REG_ADDRW-1:0]      idu_rs1id,idu_rs2id;
-  logic [`CSR_ADDRW-1:0]      idu_csrsid ;
-  logic                       idu_csrsren;
+  logic [`REG_ADDRW-1:0]      idu_rs1id, idu_rs2id;
+  logic [`CSR_ADDRW-1:0]      idu_csrsid  ;
+  logic                       idu_csrsren ;
   // get rs value from bypass: 
-  logic [`CPU_WIDTH-1:0]      idu_rs1,idu_rs2;
-  logic [`CPU_WIDTH-1:0]      idu_csrs;
+  logic [`CPU_WIDTH-1:0]      idu_rs1, idu_rs2;
+  logic [`CPU_WIDTH-1:0]      idu_csrs    ;
   // for exu:
-  logic                       idu_sysins;
-  logic [`CPU_WIDTH-1:0]      idu_imm;
-  logic [`EXU_SEL_WIDTH-1:0]  idu_exsrc;
-  logic [`EXU_OPT_WIDTH-1:0]  idu_exopt;
+  logic                       idu_sysins  ;
+  logic [`CPU_WIDTH-1:0]      idu_imm     ;
+  logic [`EXU_SEL_WIDTH-1:0]  idu_exsrc   ;
+  logic [`EXU_OPT_WIDTH-1:0]  idu_exopt   ;
   logic                       idu_excsrsrc;
   logic [`CSR_OPT_WIDTH-1:0]  idu_excsropt;
   // for lsu:
-  logic [2:0]                 idu_lsfunc3;
-  logic                       idu_lden;
-  logic                       idu_sten;
+  logic [2:0]                 idu_lsfunc3 ;
+  logic                       idu_lden    ;
+  logic                       idu_sten    ;
+  logic                       idu_fencei  ;
   // for wbu:
   logic [`REG_ADDRW-1:0]      idu_rdid    ;
   logic                       idu_rdwen   ;
@@ -941,7 +961,7 @@ module ysyx_22040561_core_top(
   ysyx_22040561_idu u_idu(
     .i_clk          (i_clk        ),
     .i_rst_n        (i_rst_n      ),
-    .i_flush        (flush        ),
+    .i_flush        (idu_flush    ),
     .i_pre_nop      (ifid_nop     ),
     .i_pre_stall    (ifid_stall   ),
     .i_pre_valid    (ifu_valid    ),
@@ -963,6 +983,7 @@ module ysyx_22040561_core_top(
     .o_idu_lsfunc3  (idu_lsfunc3  ),
     .o_idu_lden     (idu_lden     ),
     .o_idu_sten     (idu_sten     ),
+    .o_idu_fencei   (idu_fencei   ),
     .o_idu_rdid     (idu_rdid     ),
     .o_idu_rdwen    (idu_rdwen    ),
     .o_idu_csrdid   (idu_csrdid   ),
@@ -983,6 +1004,7 @@ module ysyx_22040561_core_top(
   // for lsu:
   logic                       exu_lden    ; // for lsu load en.
   logic                       exu_sten    ; // for lsu store en.
+  logic                       exu_fencei  ; // for lsu fence.i.
   logic [`CPU_WIDTH-1:0]      exu_rs2     ; // for lsu data.
   logic [2:0]                 exu_lsfunc3 ; // for lsu func3
   // for wbu:
@@ -995,7 +1017,7 @@ module ysyx_22040561_core_top(
   ysyx_22040561_exu u_exu(
     .i_clk          (i_clk          ),
     .i_rst_n        (i_rst_n        ),
-    .i_flush        (flush          ),
+    .i_flush        (exu_flush      ),
     .i_pre_nop      (idex_nop       ),
     .i_pre_valid    (idu_valid      ),
     .o_pre_ready    (idu_ready      ),
@@ -1013,6 +1035,7 @@ module ysyx_22040561_core_top(
     .i_idu_lsfunc3  (idu_lsfunc3    ),
     .i_idu_lden     (idu_lden       ),
     .i_idu_sten     (idu_sten       ),
+    .i_idu_fencei   (idu_fencei     ),
     .i_idu_rdid     (idu_rdid       ),
     .i_idu_rdwen    (idu_rdwen      ),
     .i_idu_csrdid   (idu_csrdid     ),
@@ -1024,6 +1047,7 @@ module ysyx_22040561_core_top(
     .o_exu_lsfunc3  (exu_lsfunc3    ),
     .o_exu_lden     (exu_lden       ),
     .o_exu_sten     (exu_sten       ),
+    .o_exu_fencei   (exu_fencei     ),
     .o_exu_rdid     (exu_rdid       ),
     .o_exu_rdwen    (exu_rdwen      ),
     .o_exu_res      (exu_exres      ),
@@ -1040,6 +1064,7 @@ module ysyx_22040561_core_top(
   logic [`CPU_WIDTH-1:0]      lsu_exres  ;
   logic [`CPU_WIDTH-1:0]      lsu_lsres  ;
   logic                       lsu_lden   ;
+  logic                       lsu_fencei ;
   logic [`REG_ADDRW-1:0]      lsu_rdid   ;
   logic                       lsu_rdwen  ;
   logic [`CSR_ADDRW-1:0]      lsu_csrdid ;
@@ -1049,17 +1074,18 @@ module ysyx_22040561_core_top(
   ysyx_22040561_lsu u_lsu(
     .i_clk         (i_clk         ),
     .i_rst_n       (i_rst_n       ),
-    .i_flush       (flush         ),
+    .i_flush       (lsu_flush     ),
     .dCacheIf_M    (dCacheIf_M    ),
     .i_pre_valid   (exu_valid     ),
     .o_pre_ready   (exu_ready     ),
     .o_post_valid  (lsu_valid     ),
     .i_post_ready  (lsu_ready     ),
     .i_exu_exres   (exu_exres     ),
-    .i_exu_rs2     (exu_rs2    ),
+    .i_exu_rs2     (exu_rs2       ),
     .i_exu_lsfunc3 (exu_lsfunc3   ),
     .i_exu_lden    (exu_lden      ),
     .i_exu_sten    (exu_sten      ),
+    .i_exu_fencei  (exu_fencei    ),
     .i_exu_rdid    (exu_rdid      ),
     .i_exu_rdwen   (exu_rdwen     ),
     .i_exu_csrdid  (exu_csrdid    ),
@@ -1079,6 +1105,7 @@ module ysyx_22040561_core_top(
     .o_lsu_lsres   (lsu_lsres     ),
     .o_lsu_exres   (lsu_exres     ),
     .o_lsu_lden    (lsu_lden      ),
+    .o_lsu_fencei  (lsu_fencei    ),
     .o_lsu_rdid    (lsu_rdid      ),
     .o_lsu_rdwen   (lsu_rdwen     ),
     .o_lsu_csrdid  (lsu_csrdid    ),
@@ -1101,7 +1128,7 @@ module ysyx_22040561_core_top(
   ysyx_22040561_wbu u_wbu(
     .i_clk         (i_clk        ),
     .i_rst_n       (i_rst_n      ),
-    .i_flush       (flush        ),
+    .i_flush       (wbu_flush    ),
     .i_pre_valid   (lsu_valid    ),
     .o_pre_ready   (lsu_ready    ),
     .o_post_valid  (wbu_valid    ),
@@ -1227,24 +1254,26 @@ module ysyx_22040561_core_top(
   // 2.7 bru ///////////////////////////////////////////////
 
   ysyx_22040561_bru u_bru(
-    .i_clk       (i_clk        ),
-    .i_rst_n     (i_rst_n      ),
-    .i_idu_valid (idu_valid    ),
-    .i_idu_rs1id (idu_rs1id    ),
-    .i_exu_rdid  (exu_rdid     ),
-    .i_jal       (idu_jal      ),
-    .i_jalr      (idu_jalr     ),
-    .i_brch      (idu_brch     ),
-    .i_bfun3     (idu_bfun3    ),
-    .i_rs1       (idu_rs1      ),
-    .i_rs2       (idu_rs2      ),
-    .i_imm       (idu_imm      ),
-    .i_ifupc     (ifu_pc       ),
-    .i_idupc     (idu_pc       ),
-    .i_iru_flush (flush        ),
-    .i_iru_pc    (iru_pc       ),
-    .o_next_pc   (pre_pc       ),
-    .o_ifid_nop  (ifid_nop     )
+    .i_clk        (i_clk        ),
+    .i_rst_n      (i_rst_n      ),
+    .i_idu_valid  (idu_valid    ),
+    .i_idu_rs1id  (idu_rs1id    ),
+    .i_exu_rdid   (exu_rdid     ),
+    .i_jal        (idu_jal      ),
+    .i_jalr       (idu_jalr     ),
+    .i_brch       (idu_brch     ),
+    .i_bfun3      (idu_bfun3    ),
+    .i_rs1        (idu_rs1      ),
+    .i_rs2        (idu_rs2      ),
+    .i_imm        (idu_imm      ),
+    .i_ifupc      (ifu_pc       ),
+    .i_idupc      (idu_pc       ),
+    .i_iru_flush  (iru_flush    ),
+    .i_iru_pc     (iru_pc       ),
+    .i_fence_flush(fence_flush  ),
+    .i_fence_pc   (lsu_pc+4     ),
+    .o_next_pc    (pre_pc       ),
+    .o_ifid_nop   (ifid_nop     )
   );
 
 endmodule
@@ -1342,6 +1371,7 @@ module ysyx_22040561_idu (
   output logic [2:0]                o_idu_lsfunc3 ,
   output logic                      o_idu_lden    ,
   output logic                      o_idu_sten    ,
+  output logic                      o_idu_fencei  ,
   // 3.4 for exu, dealy to use for wbu:
   output logic [`REG_ADDRW-1:0]     o_idu_rdid    ,
   output logic                      o_idu_rdwen   ,
@@ -1455,7 +1485,11 @@ module ysyx_22040561_idu (
     .o_csrdwen   (sys_csrdwen   )
   );
   
-  assign o_idu_sysins  = (ifu_ins_r[6: 0] == `TYPE_SYS);
+  wire [2:0] func3  = ifu_ins_r[14:12];
+  wire [6:0] opcode = ifu_ins_r[ 6: 0];
+
+  assign o_idu_sysins  = (opcode == `TYPE_SYS);
+  assign o_idu_fencei  = (opcode == `TYPE_FENCE) & (func3 == 3'b001);
 
   assign o_idu_rs1id    = o_idu_sysins ? sys_rs1id      : nom_rs1id     ;
   assign o_idu_rs2id    = o_idu_sysins ? `REG_ADDRW'b0  : nom_rs2id     ;
@@ -1540,7 +1574,7 @@ module ysyx_22040561_idu_normal(
 
   //2.exu info:  /////////////////////////////////////////////////////////////////////////////////////
   always @(*) begin
-    o_exopt     = `EXU_ADD;
+    o_exopt   = `EXU_NOP;
     o_src_sel = `EXU_SEL_IMM;
     case (opcode)
       `TYPE_S:        begin o_exopt = `EXU_ADD;  o_src_sel = `EXU_SEL_IMM; end // M[rs1+imm] = rs2
@@ -1701,6 +1735,7 @@ module ysyx_22040561_exu (
   input  logic  [2:0]                i_idu_lsfunc3 ,
   input  logic                       i_idu_lden    ,
   input  logic                       i_idu_sten    ,
+  input  logic                       i_idu_fencei  ,
   // 2.3 dealy for wbu:
   input  logic  [`REG_ADDRW-1:0]     i_idu_rdid    ,
   input  logic                       i_idu_rdwen   ,
@@ -1717,6 +1752,7 @@ module ysyx_22040561_exu (
   output logic  [2:0]                o_exu_lsfunc3 ,
   output logic                       o_exu_lden    ,
   output logic                       o_exu_sten    ,
+  output logic                       o_exu_fencei  ,
   // 3.2 for lsu, dealy to use for wbu:
   output logic  [`REG_ADDRW-1:0]     o_exu_rdid    ,
   output logic                       o_exu_rdwen   ,
@@ -1776,6 +1812,7 @@ module ysyx_22040561_exu (
   logic  [2:0]                 idu_lsfunc3_r ;
   logic                        idu_lden_r    ;
   logic                        idu_sten_r    ;
+  logic                        idu_fencei_r  ;
   logic  [`REG_ADDRW-1:0]      idu_rdid_r    ;
   logic                        idu_rdwen_r   ;
   logic  [`CSR_ADDRW-1:0]      idu_csrdid_r  ;
@@ -1784,16 +1821,16 @@ module ysyx_22040561_exu (
   logic  [`INS_WIDTH-1:0]      idu_ins_r     ;
   logic                        idu_nop_r     ;
 
-  parameter EXREG_WIDTH = 5*`CPU_WIDTH+`REG_ADDRW+10+`EXU_SEL_WIDTH+`EXU_OPT_WIDTH+`CSR_OPT_WIDTH+`CSR_ADDRW+`INS_WIDTH;
+  parameter EXREG_WIDTH = 5*`CPU_WIDTH+`REG_ADDRW+11+`EXU_SEL_WIDTH+`EXU_OPT_WIDTH+`CSR_OPT_WIDTH+`CSR_ADDRW+`INS_WIDTH;
 
   logic [EXREG_WIDTH-1:0] reg_din, reg_dout;
 
   assign reg_din = {i_flush | i_pre_nop ? {(EXREG_WIDTH-1){1'b0}} : {i_idu_sysins, i_idu_imm, i_idu_rs1, i_idu_rs2, i_idu_csrs, i_idu_exsrc, i_idu_exopt, i_idu_excsrsrc,
-                     i_idu_excsropt, i_idu_lsfunc3, i_idu_lden, i_idu_sten, i_idu_rdid, i_idu_rdwen, i_idu_csrdid, i_idu_csrdwen, i_idu_pc, i_idu_ins},
+                     i_idu_excsropt, i_idu_lsfunc3, i_idu_lden, i_idu_sten, i_idu_fencei, i_idu_rdid, i_idu_rdwen, i_idu_csrdid, i_idu_csrdwen, i_idu_pc, i_idu_ins},
                     i_flush ? 1'b0 : {i_pre_nop | i_idu_nop} };
 
   assign {idu_sysins_r, idu_imm_r, idu_rs1_r, idu_rs2_r, idu_csrs_r, idu_exsrc_r, idu_exopt_r, idu_excsrsrc_r, idu_excsropt_r, idu_lsfunc3_r,
-          idu_lden_r, idu_sten_r, idu_rdid_r, idu_rdwen_r, idu_csrdid_r, idu_csrdwen_r, idu_pc_r, idu_ins_r, idu_nop_r} = reg_dout;
+          idu_lden_r, idu_sten_r, idu_fencei_r, idu_rdid_r, idu_rdwen_r, idu_csrdid_r, idu_csrdwen_r, idu_pc_r, idu_ins_r, idu_nop_r} = reg_dout;
 
   ysyx_22040561_stl_reg #(
     .WIDTH      (EXREG_WIDTH),
@@ -1947,11 +1984,12 @@ module ysyx_22040561_exu (
   end
 
   // 5. select output result: ////////////////////////////////////////////////////////////////////////////////////////
-  
+
   assign o_exu_rs2     = idu_rs2_r    ;
   assign o_exu_lsfunc3 = idu_lsfunc3_r;
   assign o_exu_lden    = idu_lden_r   ;
   assign o_exu_sten    = idu_sten_r   ;
+  assign o_exu_fencei  = idu_fencei_r ;
   assign o_exu_rdid    = idu_rdid_r   ;
   assign o_exu_rdwen   = idu_rdwen_r  ;
   assign o_exu_res     = idu_sysins_r ? sys_rdres :
@@ -2301,6 +2339,7 @@ module ysyx_22040561_lsu (
   input  logic  [2:0]             i_exu_lsfunc3 ,
   input  logic                    i_exu_lden    ,
   input  logic                    i_exu_sten    ,
+  input  logic                    i_exu_fencei  ,
   input  logic  [`REG_ADDRW-1:0]  i_exu_rdid    ,
   input  logic                    i_exu_rdwen   ,
   input  logic  [`CSR_ADDRW-1:0]  i_exu_csrdid  ,
@@ -2326,6 +2365,7 @@ module ysyx_22040561_lsu (
   output logic  [`CPU_WIDTH-1:0]  o_lsu_lsres   ,
   output logic  [`CPU_WIDTH-1:0]  o_lsu_exres   ,
   output logic                    o_lsu_lden    ,
+  output logic                    o_lsu_fencei  ,
   output logic  [`REG_ADDRW-1:0]  o_lsu_rdid    ,
   output logic                    o_lsu_rdwen   ,
   output logic  [`CSR_ADDRW-1:0]  o_lsu_csrdid  ,
@@ -2358,13 +2398,14 @@ module ysyx_22040561_lsu (
     .o_dout     (pre_valid_r )
   );
 
-  assign o_post_valid   = (ldst_en & en_axi) ? dCacheIf_M.ready : pre_valid_r;
+  assign o_post_valid   = (exu_fencei_r | ldst_en & en_axi) ? dCacheIf_M.ready : pre_valid_r;
 
   logic  [`CPU_WIDTH-1:0]  exu_exres_r    ;
   logic  [`CPU_WIDTH-1:0]  exu_rs2_r      ;
   logic  [2:0]             exu_lsfunc3_r  ;
   logic                    exu_lden_r     ;
   logic                    exu_sten_r     ;
+  logic                    exu_fencei_r   ;
   logic  [`REG_ADDRW-1:0]  exu_rdid_r     ;
   logic                    exu_rdwen_r    ;
   logic  [`CSR_ADDRW-1:0]  exu_csrdid_r   ;
@@ -2375,14 +2416,14 @@ module ysyx_22040561_lsu (
   logic                    exu_nop_r      ;
   
   ysyx_22040561_stl_reg #(
-    .WIDTH      (4*`CPU_WIDTH+`REG_ADDRW+`CSR_ADDRW+7+`INS_WIDTH+1),
+    .WIDTH      (4*`CPU_WIDTH+`REG_ADDRW+`CSR_ADDRW+7+`INS_WIDTH+2),
     .RESET_VAL  (0       )
   ) prereg (
   	.i_clk      (i_clk   ),
     .i_rst_n    (i_rst_n ),
     .i_wen      (i_flush | pre_sh ),
-    .i_din      (i_flush ? 0: {i_exu_exres, i_exu_rs2, i_exu_lsfunc3, i_exu_lden, i_exu_sten, i_exu_rdid, i_exu_rdwen, i_exu_csrdid, i_exu_csrdwen, i_exu_csrd, i_exu_pc, i_exu_ins, i_exu_nop} ),
-    .o_dout     (             {exu_exres_r, exu_rs2_r, exu_lsfunc3_r, exu_lden_r, exu_sten_r, exu_rdid_r, exu_rdwen_r, exu_csrdid_r, exu_csrdwen_r, exu_csrd_r, exu_pc_r, exu_ins_r, exu_nop_r} )
+    .i_din      (i_flush ? 0: {i_exu_exres, i_exu_rs2, i_exu_lsfunc3, i_exu_lden, i_exu_sten, i_exu_rdid, i_exu_rdwen, i_exu_fencei, i_exu_csrdid, i_exu_csrdwen, i_exu_csrd, i_exu_pc, i_exu_ins, i_exu_nop} ),
+    .o_dout     (             {exu_exres_r, exu_rs2_r, exu_lsfunc3_r, exu_lden_r, exu_sten_r, exu_rdid_r, exu_rdwen_r, exu_fencei_r, exu_csrdid_r, exu_csrdwen_r, exu_csrd_r, exu_pc_r, exu_ins_r, exu_nop_r} )
   );
 
   // 2. deal with device :///////////////////////////////////////////////////////////////////////////////////////
@@ -2407,8 +2448,8 @@ module ysyx_22040561_lsu (
 
   // 4. use interface to read/write, generate valid signals for post stage:////////////////////////////////////
 
-  assign dCacheIf_M.valid  = en_axi & ldst_en & ~(i_iru_excp | i_iru_intr);
-  assign dCacheIf_M.reqtyp = stor_en           ; 
+  assign dCacheIf_M.valid  = (exu_fencei_r | en_axi & ldst_en) & ~(i_iru_excp | i_iru_intr);
+  assign dCacheIf_M.reqtyp = stor_en           ;
   assign dCacheIf_M.addr   = lsu_addr          ;
   assign dCacheIf_M.wdata  = exu_rs2_r         ;
   assign dCacheIf_M.size   = exu_lsfunc3_r[1:0];
@@ -2452,6 +2493,7 @@ module ysyx_22040561_lsu (
   assign o_lsu_lsres   = en_clint ? i_clint_rdata : dCache_rdata;
   assign o_lsu_exres   = exu_exres_r  ;
   assign o_lsu_lden    = exu_lden_r   ;
+  assign o_lsu_fencei  = exu_fencei_r ;
   assign o_lsu_rdid    = exu_rdid_r   ;
   assign o_lsu_rdwen   = exu_rdwen_r  ;
   assign o_lsu_csrdid  = exu_csrdid_r ;
@@ -2699,23 +2741,25 @@ endmodule
 
 
 module ysyx_22040561_bru (
-  input                         i_clk       ,
-  input                         i_rst_n     ,
-  input                         i_idu_valid , // use for jalr, to fix bug with: jalr x[n],x[n],imm
-  input     [`REG_ADDRW-1:0]    i_idu_rs1id , // use for jalr, to fix bug with: jalr x[n],x[n],imm
-  input     [`REG_ADDRW-1:0]    i_exu_rdid  , // use for jalr, to fix bug with: jalr x[n],x[n],imm
-  input                         i_jal       ,
-  input                         i_jalr      ,
-  input                         i_brch      ,
-  input     [2:0]               i_bfun3     ,
-  input     [`CPU_WIDTH-1:0]    i_rs1       ,
-  input     [`CPU_WIDTH-1:0]    i_rs2       ,
-  input     [`CPU_WIDTH-1:0]    i_imm       ,
-  input     [`CPU_WIDTH-1:0]    i_ifupc     ,
-  input     [`CPU_WIDTH-1:0]    i_idupc     ,
-  input                         i_iru_flush ,
-  input     [`CPU_WIDTH-1:0]    i_iru_pc    ,
-  output    [`CPU_WIDTH-1:0]    o_next_pc   ,
+  input                         i_clk         ,
+  input                         i_rst_n       ,
+  input                         i_idu_valid   , // use for jalr, to fix bug with: jalr x[n],x[n],imm
+  input     [`REG_ADDRW-1:0]    i_idu_rs1id   , // use for jalr, to fix bug with: jalr x[n],x[n],imm
+  input     [`REG_ADDRW-1:0]    i_exu_rdid    , // use for jalr, to fix bug with: jalr x[n],x[n],imm
+  input                         i_jal         ,
+  input                         i_jalr        ,
+  input                         i_brch        ,
+  input     [2:0]               i_bfun3       ,
+  input     [`CPU_WIDTH-1:0]    i_rs1         ,
+  input     [`CPU_WIDTH-1:0]    i_rs2         ,
+  input     [`CPU_WIDTH-1:0]    i_imm         ,
+  input     [`CPU_WIDTH-1:0]    i_ifupc       ,
+  input     [`CPU_WIDTH-1:0]    i_idupc       ,
+  input                         i_iru_flush   ,
+  input     [`CPU_WIDTH-1:0]    i_iru_pc      ,
+  input                         i_fence_flush ,
+  input     [`CPU_WIDTH-1:0]    i_fence_pc    ,
+  output    [`CPU_WIDTH-1:0]    o_next_pc     ,
   output                        o_ifid_nop
 );
 
@@ -2761,7 +2805,7 @@ module ysyx_22040561_bru (
 
   assign seq_pc  = i_ifupc + 4;
   assign jump_pc = i_jalr ? (rs1 + i_imm) : (i_idupc + i_imm);  //means 1 for jalr , 0 for jal || bjump.
-  assign o_next_pc = i_iru_flush ? i_iru_pc : (jump ? jump_pc : seq_pc);
+  assign o_next_pc = i_fence_flush ? i_fence_pc : (i_iru_flush ? i_iru_pc : (jump ? jump_pc : seq_pc));
   assign o_ifid_nop = jump;
 
   // 3. update pc in ifu - pipe_pc_if, use next_pc to update pc.
@@ -3158,7 +3202,44 @@ module ysyx_22040561_data_ary(
 
 endmodule
 
-module ysyx_22040561_tag_ary#(
+module ysyx_22040561_iCache_tag_ary#(
+  DATA_WIDTH = 64
+)(
+  input                         i_clk     ,
+  input                         i_rst_n   ,
+  input                         i_invalid ,
+  input                         i_wen     ,
+  input       [  6:0]           i_addr    , // 7 bit, 128 depth.
+  input       [DATA_WIDTH-1:0]  i_din     ,
+  output      [DATA_WIDTH-1:0]  o_dout
+);
+
+  logic [DATA_WIDTH-1:0] tag_array [127:0];
+  logic [DATA_WIDTH-1:0] wdata     [127:0];
+  logic [127:0] wen;
+
+  for (genvar i=0; i<128; i=i+1) begin
+    assign wen  [i]           = i_invalid | (i_wen & (i_addr == i));
+    assign wdata[i][`VLD_BIT] = i_invalid ? 1'b0                   : i_din[`VLD_BIT];
+    assign wdata[i][`TAG_BIT] = i_invalid ? tag_array[i][`TAG_BIT] : i_din[`TAG_BIT];
+
+    ysyx_22040561_stl_reg #(
+      .WIDTH      (DATA_WIDTH   ),
+      .RESET_VAL  (0            )
+    ) u_reg (
+      .i_clk      (i_clk        ),
+      .i_rst_n    (i_rst_n      ),
+      .i_wen      (wen[i]       ),
+      .i_din      (wdata[i]     ),
+      .o_dout     (tag_array[i] )
+    );
+  end
+
+  assign o_dout = tag_array[i_addr];
+
+endmodule
+
+module ysyx_22040561_dCache_tag_ary#(
   DATA_WIDTH = 64
 )(
   input                         i_clk  ,
@@ -3169,30 +3250,32 @@ module ysyx_22040561_tag_ary#(
   output      [DATA_WIDTH-1:0]  o_dout
 );
 
-  logic [DATA_WIDTH-1:0] data [127:0];
+  logic [DATA_WIDTH-1:0] tag_array [127:0];
   logic [127:0] wen;
 
   for (genvar i=0; i<128; i=i+1) begin
     assign wen[i] = i_wen & (i_addr == i);
     ysyx_22040561_stl_reg #(
-      .WIDTH      (DATA_WIDTH ),
-      .RESET_VAL  (0          )
+      .WIDTH      (DATA_WIDTH   ),
+      .RESET_VAL  (0            )
     ) u_reg (
-      .i_clk      (i_clk      ),
-      .i_rst_n    (i_rst_n    ),
-      .i_wen      (wen[i]     ),
-      .i_din      (i_din      ),
-      .o_dout     (data[i]    )
+      .i_clk      (i_clk        ),
+      .i_rst_n    (i_rst_n      ),
+      .i_wen      (wen[i]       ),
+      .i_din      (i_din        ),
+      .o_dout     (tag_array[i] )
     );
   end
 
-  assign o_dout = data[i_addr];
+  assign o_dout = tag_array[i_addr];
 
 endmodule
 
-module ysyx_22040561_dCache (
+
+module ysyx_22040561_dCache_wrapper (
   input                       i_clk     ,
   input                       i_rst_n   ,
+  input                       i_clean   ,
   ysyx_22040561_uni_if.Slave  dCacheIf_S,  //  64 bit width
   ysyx_22040561_uni_if.Master dMemIf_M     // 128 bit width
 );
@@ -3210,9 +3293,9 @@ module ysyx_22040561_dCache (
 */
 
   // in this module, choose cachable memory, or uncachable device.
-  // only cachable interface can read iCache, otherwise dCacheIf_S connect dMemIf_M directly.
+  // only cachable interface can read dCache, otherwise dCacheIf_S connect dMemIf_M directly.
 
-  wire cachable = dCacheIf_S.addr[31];
+  wire cachable = dCacheIf_S.addr[31] | i_clean;
 
   ysyx_22040561_uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(`CPU_WIDTH)) dCachableCacheIf();
   ysyx_22040561_uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(128)) dCachableMemIf();
@@ -3226,9 +3309,10 @@ module ysyx_22040561_dCache (
   assign dCachableMemIf.ready      = dMemIf_M.ready & cachable;
   assign dCachableMemIf.rdata      = dMemIf_M.rdata;
 
-  ysyx_22040561_dCache_intern u_dCache_intern(
+  ysyx_22040561_dCache u_dCache(
     .i_clk      (i_clk            ),
     .i_rst_n    (i_rst_n          ),
+    .i_clean    (i_clean          ),
     .dCacheIf_S (dCachableCacheIf ),
     .dMemIf_M   (dCachableMemIf   )
   );
@@ -3246,9 +3330,10 @@ module ysyx_22040561_dCache (
 
 endmodule
 
-module ysyx_22040561_dCache_intern (
+module ysyx_22040561_dCache (
   input                       i_clk     ,
   input                       i_rst_n   ,
+  input                       i_clean   ,
   ysyx_22040561_uni_if.Slave  dCacheIf_S,  //  64 bit width
   ysyx_22040561_uni_if.Master dMemIf_M     // 128 bit width
 );
@@ -3268,6 +3353,7 @@ module ysyx_22040561_dCache_intern (
   //   |    | |                    |        |     | |                   |  ↓
   //   ⌊_____⌋ ⌊____________________⌋         ⌊_____⌋ ⌊____________________⌋ ——
 
+  logic [6:0]            cacheline_addr  ;
 
   // tag array signal:
   logic                  tary_wen   [1:0];
@@ -3282,13 +3368,13 @@ module ysyx_22040561_dCache_intern (
   logic [127:0]          dary_rdata [1:0];
 
   for (genvar i=0; i<2 ; i=i+1) begin
-    ysyx_22040561_tag_ary #(
+    ysyx_22040561_dCache_tag_ary #(
       .DATA_WIDTH (`dTARY_W)
     ) u_tag_ary(
       .i_clk   (i_clk         ),
       .i_rst_n (i_rst_n       ),
       .i_wen   (tary_wen  [i] ),
-      .i_addr  (index         ),
+      .i_addr  (cacheline_addr),
       .i_din   (tary_wdata[i] ),
       .o_dout  (tary_rdata[i] )
     );
@@ -3298,7 +3384,7 @@ module ysyx_22040561_dCache_intern (
       .i_ren   (dary_ren  [i] ),
       .i_wen   (dary_wen  [i] ),
       .i_wstrb (dary_wstrb[i] ),
-      .i_addr  (index         ),
+      .i_addr  (cacheline_addr),
       .i_wdata (dary_wdata[i] ),
       .o_rdata (dary_rdata[i] )
     );
@@ -3320,67 +3406,75 @@ module ysyx_22040561_dCache_intern (
     );
   end
 
-  // 2. control signals: ///////////////////////////////////////////////////////////////////////////////////////////////////
   wire [`TAG_BIT] tag    = dCacheIf_S.addr[`ADR_WIDTH-1:11];
   wire [6:0]      index  = dCacheIf_S.addr[ 10:4];
   wire [3:0]      offset = dCacheIf_S.addr[  3:0];
+
+  // 2. state machine: /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  enum logic[2:0] {IDLE, WBUS, RBUS, HIT, CLEAN_CUNT, CLEAN_WBUS} state;
+  logic [2:0] dch_state, dch_state_n;
+
+  ysyx_22040561_stl_reg #(
+    .WIDTH      (3          ),
+    .RESET_VAL  (IDLE       )
+  ) reg_status (
+  	.i_clk      (i_clk      ),
+    .i_rst_n    (i_rst_n    ),
+    .i_wen      (1'b1       ),
+    .i_din      (dch_state_n),
+    .o_dout     (dch_state  )
+  );
+
+  always @(*) begin
+    case (dch_state)
+      IDLE:       if(dCacheIf_S.valid)begin
+                    if(i_clean) begin
+                      dch_state_n = CLEAN_CUNT;
+                    end else if(|hit) begin
+                      dch_state_n = HIT;
+                    end else if (victimblk_valid & victimblk_dirty) begin
+                      dch_state_n = WBUS;
+                    end else begin
+                      dch_state_n = RBUS;
+                    end
+                  end else begin
+                    dch_state_n = IDLE;
+                  end
+      WBUS:       if(dMemIf_M.ready)
+                    dch_state_n = RBUS;
+                  else
+                    dch_state_n = WBUS;
+      RBUS:       if(dMemIf_M.ready)
+                    dch_state_n = IDLE;
+                  else
+                    dch_state_n = RBUS;
+      HIT:        dch_state_n = IDLE;
+      CLEAN_CUNT: if(clean_hit_dirtyline)
+                    dch_state_n = CLEAN_WBUS;
+                  else if(clean_cnt == 8'hff)
+                    dch_state_n = IDLE;
+                  else
+                    dch_state_n = CLEAN_CUNT;
+      CLEAN_WBUS: if(dMemIf_M.ready)begin
+                    if(clean_cnt == 8'hff)
+                      dch_state_n = IDLE;
+                    else
+                      dch_state_n = CLEAN_CUNT;
+                  end else begin
+                    dch_state_n = CLEAN_WBUS;
+                  end
+      default:    dch_state_n = IDLE;
+    endcase
+  end
+
+  // 3. hit, read/write data array, update recent/dirty, update dCacheIf_S signal: ///////////////////////////////////////////
 
   wire [1:0] hit;
   for (genvar i=0; i<2 ; i=i+1) begin
     assign hit[i] = (tary_rdata[i][`TAG_BIT] == tag) & tary_rdata[i][`VLD_BIT];
   end
 
-  wire victim_blkid, victim_dirty, victim_valid;
-  wire [`TAG_BIT] victim_tag;
-
-  assign victim_blkid = ~recent[index];
-  assign victim_dirty = tary_rdata[victim_blkid][`DRT_BIT];
-  assign victim_valid = tary_rdata[victim_blkid][`VLD_BIT];
-  assign victim_tag   = tary_rdata[victim_blkid][`TAG_BIT];
-
-  // 3. state machine: /////////////////////////////////////////////////////////////////////////////////////////////////////
-
-  enum logic[1:0] {IDLE, WBUS, RBUS, HIT} state;
-  logic [1:0] ich_state, ich_state_n;
-
-  ysyx_22040561_stl_reg #(
-    .WIDTH      (2          ),
-    .RESET_VAL  (IDLE       )
-  ) reg_status (
-  	.i_clk      (i_clk      ),
-    .i_rst_n    (i_rst_n    ),
-    .i_wen      (1'b1       ),
-    .i_din      (ich_state_n),
-    .o_dout     (ich_state  )
-  );
-
-  always @(*) begin
-    case (ich_state)
-      IDLE:     if(dCacheIf_S.valid)begin
-                  if(|hit)begin
-                    ich_state_n = HIT;
-                  end else if (victim_valid & victim_dirty) begin
-                    ich_state_n = WBUS;
-                  end else begin
-                    ich_state_n = RBUS;
-                  end
-                end else begin
-                  ich_state_n = IDLE;
-                end
-      WBUS:     if(dMemIf_M.ready)
-                  ich_state_n = RBUS;
-                else
-                  ich_state_n = WBUS;
-      RBUS:     if(dMemIf_M.ready)
-                  ich_state_n = IDLE;
-                else
-                  ich_state_n = RBUS;
-      HIT:      ich_state_n = IDLE;
-      default:  ich_state_n = IDLE;
-    endcase
-  end
-
-  // 4. hit, read/write data array, update recent/dirty, update dCacheIf_S signal: ///////////////////////////////////////////
   logic                 tary_hit_wen   [1:0];
   logic [`dTARY_W-1:0]  tary_hit_wdata [1:0];
   logic                 dary_hit_ren   [1:0];
@@ -3388,20 +3482,20 @@ module ysyx_22040561_dCache_intern (
   logic [15:0]          dary_hit_wstrb [1:0];
   logic [127:0]         dary_hit_wdata [1:0];
 
-  // 4.1 update recent://////////////////////////////////////////////////////////////////////////////////////////////////////
+  // 3.1 update recent://////////////////////////////////////////////////////////////////////////////////////////////////////
   for (genvar i=0; i<128; i=i+1 ) begin
-    assign recent_wen[i] = (ich_state == HIT) & (index == i);
+    assign recent_wen[i] = (dch_state == HIT) & (index == i);
   end
   assign recent_wdata = hit[1];
 
-  // 4.2 read data array: ///////////////////////////////////////////////////////////////////////////////////////////////////
+  // 3.2 read data array: ///////////////////////////////////////////////////////////////////////////////////////////////////
   for (genvar i=0; i<2 ; i=i+1) begin
-    assign dary_hit_ren  [i] = (ich_state_n == HIT) & hit[i] & (dCacheIf_S.reqtyp == `REQ_READ);
+    assign dary_hit_ren  [i] = (dch_state_n == HIT) & hit[i] & (dCacheIf_S.reqtyp == `REQ_READ);
   end
 
   wire [127:0] hit_cacheline = hit[1] ? dary_rdata[1] : (hit[0] ? dary_rdata[0] : 128'b0);
 
-  // 4.3 write data array, update tag array dirty bit: ///////////////////////////////////////////////////////////////////////
+  // 3.3 write data array, update tag array dirty bit: ///////////////////////////////////////////////////////////////////////
   wire [7:0] wstrb;
   ysyx_22040561_stl_mux_default #(4, 2, 8) mux_size (wstrb, dCacheIf_S.size, 8'b0, {
     2'b00 , 8'b0000_0001, // 1 byte.
@@ -3411,20 +3505,29 @@ module ysyx_22040561_dCache_intern (
   });
 
   for (genvar i=0; i<2 ; i=i+1) begin
-    assign tary_hit_wen   [i] = (dCacheIf_S.reqtyp == `REQ_WRITE) & (ich_state == HIT) & hit[i];
+    assign tary_hit_wen   [i] = (dCacheIf_S.reqtyp == `REQ_WRITE) & (dch_state == HIT) & hit[i];
     assign tary_hit_wdata [i] = {1'b1,tary_rdata[i][`dTARY_W-2:0]};       // dirty bit <= 1;
-    assign dary_hit_wen   [i] = (dCacheIf_S.reqtyp == `REQ_WRITE) & (ich_state == HIT) & hit[i];
+    assign dary_hit_wen   [i] = (dCacheIf_S.reqtyp == `REQ_WRITE) & (dch_state == HIT) & hit[i];
     assign dary_hit_wstrb [i] = {8'b0, wstrb} << offset;                    // bytes.
     assign dary_hit_wdata [i] = {64'b0, dCacheIf_S.wdata} << {offset,3'b0}; // bits. {offset,3'b0} means (offset*8)
   end
 
-  // 4.4 update dCacheIf_S signal: ///////////////////////////////////////////////////////////////////////////////////////////
-  // input:  valid, addr, reqtyp, wdata, size;
-  // output: ready, rdata;
-  assign dCacheIf_S.ready = (ich_state == HIT);
-  assign dCacheIf_S.rdata = {hit_cacheline >> {offset,3'b0}}[`CPU_WIDTH-1:0];
+  // 3.4 update dCacheIf_S signal: ///////////////////////////////////////////////////////////////////////////////////////////
+  logic                   dCacheIf_miss_ready  ;
+  logic [`CPU_WIDTH-1:0]  dCacheIf_miss_rdata  ;
 
-  // 5. miss, write dirty cacheline to bus, read new cacheline from bus : ///////////////////////////////////////////////////
+  assign dCacheIf_miss_ready = (dch_state == HIT);
+  assign dCacheIf_miss_rdata = {hit_cacheline >> {offset,3'b0}}[`CPU_WIDTH-1:0];
+
+  // 4. miss, write dirty cacheline to bus, read new cacheline from bus : ///////////////////////////////////////////////////
+  wire victimblk_wayid, victimblk_dirty, victimblk_valid;
+  wire [`TAG_BIT] victimblk_tag;
+
+  assign victimblk_wayid = ~recent[index];
+  assign victimblk_dirty = tary_rdata[victimblk_wayid][`DRT_BIT];
+  assign victimblk_valid = tary_rdata[victimblk_wayid][`VLD_BIT];
+  assign victimblk_tag   = tary_rdata[victimblk_wayid][`TAG_BIT];
+
   logic                 tary_miss_wen   [1:0];
   logic [`dTARY_W-1:0]  tary_miss_wdata [1:0];
   logic                 dary_miss_ren   [1:0];
@@ -3432,47 +3535,121 @@ module ysyx_22040561_dCache_intern (
   logic [15:0]          dary_miss_wstrb [1:0];
   logic [127:0]         dary_miss_wdata [1:0];
 
-  // 5.1 read dirty victim block, write bus: ///////////////////////////////////////////////////////////////////////////////
+  // 4.1 read dirty victim block, write bus: ///////////////////////////////////////////////////////////////////////////////
   for (genvar i=0; i<2 ; i=i+1) begin
-    assign dary_miss_ren  [i] = (ich_state_n == WBUS) & (i == victim_blkid);
+    assign dary_miss_ren  [i] = (dch_state_n == WBUS) & (i == victimblk_wayid);
   end
 
-  // 5.2 read bus, write to victim block: //////////////////////////////////////////////////////////////////////////////////
+  // 4.2 read bus, write to victim block: //////////////////////////////////////////////////////////////////////////////////
   for (genvar i=0; i<2 ; i=i+1) begin
-    assign tary_miss_wen    [i] = dMemIf_M.valid & dMemIf_M.ready & (i == victim_blkid);
-    assign tary_miss_wdata  [i] = (ich_state == WBUS) ? {1'b0, victim_valid, victim_tag}: {1'b0, 1'b1, tag};  //{dirty,valid,tag};
-    // assign tary_miss_wen    [i] = (ich_state == RBUS) & dMemIf_M.ready & (i == victim_blkid);
+    assign tary_miss_wen    [i] = dMemIf_M.valid & dMemIf_M.ready & (i == victimblk_wayid);
+    assign tary_miss_wdata  [i] = (dch_state == WBUS) ? {1'b0, victimblk_valid, victimblk_tag}: {1'b0, 1'b1, tag};  //{dirty,valid,tag};
+    // assign tary_miss_wen    [i] = (dch_state == RBUS) & dMemIf_M.ready & (i == victimblk_wayid);
     // assign tary_miss_wdata  [i] = {1'b0, 1'b1, tag};  //{dirty,valid,tag};
-    assign dary_miss_wen    [i] = (ich_state == RBUS) & dMemIf_M.ready & (i == victim_blkid);
+    assign dary_miss_wen    [i] = (dch_state == RBUS) & dMemIf_M.ready & (i == victimblk_wayid);
     assign dary_miss_wstrb  [i] = 16'hffff;
     assign dary_miss_wdata  [i] = dMemIf_M.rdata;
   end
 
-  // 5.3 dMemIf_M signal: //////////////////////////////////////////////////////////////////////////////////////////////////
-  // input:  ready, rdata;
-  // output: valid, reqtyp, addr, wdata, size;
+  // 4.3 update dMemIf_M signal: //////////////////////////////////////////////////////////////////////////////////////////
+  logic                   dMemIf_miss_valid  ;
+  logic                   dMemIf_miss_reqtyp ;
+  logic [`ADR_WIDTH-1:0]  dMemIf_miss_addr   ;
+  logic [127:0]           dMemIf_miss_wdata  ;
 
-  assign dMemIf_M.valid  =  (ich_state == WBUS) | (ich_state == RBUS);
-  assign dMemIf_M.reqtyp =  (ich_state == WBUS) ? `REQ_WRITE : `REQ_READ;
-  assign dMemIf_M.addr   =  (ich_state == WBUS) ? {victim_tag,index,4'b0} : {tag,index,4'b0};
-  assign dMemIf_M.wdata  =  (ich_state == WBUS) ? dary_rdata[victim_blkid] : 128'b0;
-  assign dMemIf_M.size   =  2'b11;
+  assign dMemIf_miss_valid  =  (dch_state == WBUS) | (dch_state == RBUS) ;
+  assign dMemIf_miss_reqtyp =  (dch_state == WBUS) ? `REQ_WRITE : `REQ_READ;
+  assign dMemIf_miss_addr   =  (dch_state == WBUS) ? {victimblk_tag, index, 4'b0} : {tag, index, 4'b0};
+  assign dMemIf_miss_wdata  =  (dch_state == WBUS) ? dary_rdata[victimblk_wayid] : 128'b0;
 
-  // 6. tag_arry & data_array control signals://////////////////////////////////////////////////////////////////////////////
+  // 5. clean dCache signals.///////////////////////////////////////////////////////////////////////////////////////////////
+
+  // 5.1 count cacheline times. ////////////////////////////////////////////////////////////////////////////////////////////
+  logic [7:0]           clean_cnt ;  // 8 bit. clean_cnt[7] means set.
+
+  ysyx_22040561_stl_reg #(
+    .WIDTH      (8          ),
+    .RESET_VAL  (8'hff      ) // full.
+  ) reg_count (
+    .i_clk      (i_clk      ),
+    .i_rst_n    (i_rst_n    ),
+    .i_wen      (dch_state_n == CLEAN_CUNT),
+    .i_din      (clean_cnt+1),
+    .o_dout     (clean_cnt  )
+  );
+
+  // 5.2 read dirty cacheline, write bus: //////////////////////////////////////////////////////////////////////////////////
+  logic                 cleanblk_wayid, cleanblk_dirty, cleanblk_valid;
+  logic [6:0]           cleanblk_index;
+  logic [`TAG_W-1:0]    cleanblk_tag;
+
+  logic                 tary_clean_wen   [1:0];
+  logic [`dTARY_W-1:0]  tary_clean_wdata [1:0];
+  logic                 dary_clean_ren   [1:0];
+
+  assign cleanblk_index = clean_cnt[6:0];
+  assign cleanblk_wayid = clean_cnt[7];
+  assign cleanblk_dirty = tary_rdata[cleanblk_wayid][`DRT_BIT];
+  assign cleanblk_valid = tary_rdata[cleanblk_wayid][`VLD_BIT];
+  assign cleanblk_tag   = tary_rdata[cleanblk_wayid][`TAG_BIT];
+
+  wire clean_hit_dirtyline = cleanblk_valid & cleanblk_dirty;
+
   for (genvar i=0; i<2 ; i=i+1) begin
-    assign tary_wen    [i] = tary_miss_wen[i] | tary_hit_wen[i];
-    assign tary_wdata  [i] = tary_miss_wen[i] ? tary_miss_wdata[i] : tary_hit_wdata[i];
-    assign dary_ren    [i] = dary_miss_ren[i] | dary_hit_ren[i];
-    assign dary_wen    [i] = dary_miss_wen[i] | dary_hit_wen[i];
+    assign tary_clean_wen   [i] = (i == clean_cnt[7]) & (dch_state == CLEAN_WBUS) & dMemIf_M.ready;
+    assign tary_clean_wdata [i] = {1'b0, cleanblk_valid, cleanblk_tag};  //{dirty,valid,tag};
+    assign dary_clean_ren   [i] = (i == clean_cnt[7]) & (dch_state_n == CLEAN_WBUS);
+  end
+
+  // 5.4 update dMemIf_M signal: //////////////////////////////////////////////////////////////////////////////////////////
+  logic                   dMemIf_clean_valid  ;
+  logic                   dMemIf_clean_reqtyp ;
+  logic [`ADR_WIDTH-1:0]  dMemIf_clean_addr   ;
+  logic [127:0]           dMemIf_clean_wdata  ;
+
+  assign dMemIf_clean_valid  = (dch_state == CLEAN_WBUS);
+  assign dMemIf_clean_reqtyp = `REQ_WRITE;
+  assign dMemIf_clean_addr   = {cleanblk_tag, cleanblk_index, 4'b0};
+  assign dMemIf_clean_wdata  = dary_rdata[cleanblk_wayid];
+
+  // 5.5 update dCacheIf_S signal: /////////////////////////////////////////////////////////////////////////////////////////
+
+  logic                   dCacheIf_clean_ready  ;
+  logic [`CPU_WIDTH-1:0]  dCacheIf_clean_rdata  ;
+
+  assign dCacheIf_clean_ready = (dch_state == CLEAN_CUNT | dch_state == CLEAN_WBUS) & (dch_state_n == IDLE);
+  assign dCacheIf_clean_rdata = `CPU_WIDTH'b0;
+
+  // 6. all signals combination ://////////////////////////////////////////////////////////////////////////////////////////
+
+  assign cacheline_addr = i_clean ? cleanblk_index : index;
+
+  for (genvar i=0; i<2 ; i=i+1) begin
+    assign tary_wen    [i] = tary_miss_wen[i] | tary_hit_wen   [i] | tary_clean_wen[i];
+    assign tary_wdata  [i] = tary_miss_wen[i] ? tary_miss_wdata[i] : (tary_hit_wen [i] ? tary_hit_wdata[i] : tary_clean_wdata [i]);
+    assign dary_ren    [i] = dary_miss_ren[i] | dary_hit_ren   [i] | dary_clean_ren[i];
+    assign dary_wen    [i] = dary_miss_wen[i] | dary_hit_wen   [i] ;
     assign dary_wstrb  [i] = dary_miss_wen[i] ? dary_miss_wstrb[i] : dary_hit_wstrb[i];
     assign dary_wdata  [i] = dary_miss_wen[i] ? dary_miss_wdata[i] : dary_hit_wdata[i];
   end
 
+  // dMemIf_M signal: input: ready, rdata; output: valid, reqtyp, addr, wdata, size;
+  assign dMemIf_M.valid  =  dMemIf_clean_valid | dMemIf_miss_valid;
+  assign dMemIf_M.reqtyp =  dMemIf_clean_valid ? dMemIf_clean_reqtyp : dMemIf_miss_reqtyp ;
+  assign dMemIf_M.addr   =  dMemIf_clean_valid ? dMemIf_clean_addr   : dMemIf_miss_addr   ;
+  assign dMemIf_M.wdata  =  dMemIf_clean_valid ? dMemIf_clean_wdata  : dMemIf_miss_wdata  ;
+  assign dMemIf_M.size   =  2'b11;
+
+  // dCacheIf_S signal: input:  valid, addr, reqtyp, wdata, size; output: ready, rdata;
+  assign dCacheIf_S.ready = dCacheIf_clean_ready | dCacheIf_miss_ready ;
+  assign dCacheIf_S.rdata = dCacheIf_clean_ready ? dCacheIf_clean_rdata : dCacheIf_miss_rdata ;
+
 endmodule
 
-module ysyx_22040561_iCache (
+module ysyx_22040561_iCache_wrapper (
   input                       i_clk     ,
   input                       i_rst_n   ,
+  input                       i_invalid ,
   ysyx_22040561_uni_if.Slave  iCacheIf_S,  //  32 bit width
   ysyx_22040561_uni_if.Master iMemIf_M     // 128 bit width
 );
@@ -3506,9 +3683,10 @@ module ysyx_22040561_iCache (
   assign iCachableMemIf.ready      = iMemIf_M.ready & cachable;
   assign iCachableMemIf.rdata      = iMemIf_M.rdata;
 
-  ysyx_22040561_iCache_intern u_iCache_intern(
+  ysyx_22040561_iCache u_iCache(
     .i_clk      (i_clk            ),
     .i_rst_n    (i_rst_n          ),
+    .i_invalid  (i_invalid        ),
     .iCacheIf_S (iCachableCacheIf ),
     .iMemIf_M   (iCachableMemIf   )
   );
@@ -3526,9 +3704,10 @@ module ysyx_22040561_iCache (
 
 endmodule
 
-module ysyx_22040561_iCache_intern (
+module ysyx_22040561_iCache (
   input                       i_clk     ,
   input                       i_rst_n   ,
+  input                       i_invalid ,
   ysyx_22040561_uni_if.Slave  iCacheIf_S,  //  32 bit width
   ysyx_22040561_uni_if.Master iMemIf_M     // 128 bit width
 );
@@ -3562,11 +3741,12 @@ module ysyx_22040561_iCache_intern (
   logic [127:0]          dary_rdata [1:0];
 
   for (genvar i=0; i<2 ; i=i+1) begin
-    ysyx_22040561_tag_ary #(
+    ysyx_22040561_iCache_tag_ary #(
       .DATA_WIDTH (`iTARY_W)
     ) u_tag_ary(
       .i_clk   (i_clk         ),
       .i_rst_n (i_rst_n       ),
+      .i_invalid(i_invalid    ),
       .i_wen   (tary_wen  [i] ),
       .i_addr  (index         ),
       .i_din   (tary_wdata[i] ),

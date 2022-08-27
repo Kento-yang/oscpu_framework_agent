@@ -1,0 +1,35 @@
+
+/home/dingyawei/ysyx-workbench/am-kernels/tests/cpu-tests/build/ldst_bypass-riscv64-npc.elf:     file format elf64-littleriscv
+
+
+Disassembly of section .text:
+
+0000000080000000 <_start>:
+    80000000:	00000413          	li	s0,0
+    80000004:	00009117          	auipc	sp,0x9
+    80000008:	ffc10113          	addi	sp,sp,-4 # 80009000 <_end>
+    8000000c:	034000ef          	jal	ra,80000040 <_trm_init>
+
+0000000080000010 <main>:
+    80000010:	00000717          	auipc	a4,0x0
+    80000014:	07072703          	lw	a4,112(a4) # 80000080 <temp>
+    80000018:	00000797          	auipc	a5,0x0
+    8000001c:	04878793          	addi	a5,a5,72 # 80000060 <mem>
+    80000020:	00e7a023          	sw	a4,0(a5)
+    80000024:	00e7a223          	sw	a4,4(a5)
+    80000028:	00000513          	li	a0,0
+    8000002c:	00008067          	ret
+
+0000000080000030 <halt>:
+    80000030:	0000100f          	fence.i
+    80000034:	00050513          	mv	a0,a0
+    80000038:	0000006b          	0x6b
+    8000003c:	0000006f          	j	8000003c <halt+0xc>
+
+0000000080000040 <_trm_init>:
+    80000040:	ff010113          	addi	sp,sp,-16
+    80000044:	00000517          	auipc	a0,0x0
+    80000048:	01450513          	addi	a0,a0,20 # 80000058 <_etext>
+    8000004c:	00113423          	sd	ra,8(sp)
+    80000050:	fc1ff0ef          	jal	ra,80000010 <main>
+    80000054:	fddff0ef          	jal	ra,80000030 <halt>

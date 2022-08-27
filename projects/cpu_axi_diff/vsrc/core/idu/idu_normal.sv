@@ -57,7 +57,7 @@ module idu_normal(
 
   //2.exu info:  /////////////////////////////////////////////////////////////////////////////////////
   always @(*) begin
-    o_exopt     = `EXU_ADD;
+    o_exopt   = `EXU_NOP;
     o_src_sel = `EXU_SEL_IMM;
     s_id_err        = 3'b0;
     case (opcode)
