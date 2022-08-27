@@ -107,17 +107,16 @@ module top(
   wire dMemIfDone = dMemIf.valid & dMemIf.ready ;
   wire iMemIfFree = iMemIf.valid & iMemIf.ready | !iMemIf.valid ;
 
-  always_ff @(posedge i_clk or negedge i_rst_n) begin
-    if(!i_rst_n)begin
-      uniID <= 1'b0;
-    end
-    else if(dMemIfDone)begin
-      uniID <= 1'b0;
-    end
-    else if(dMemIf.valid & iMemIfFree)begin
-      uniID <= 1'b1;
-    end
-  end
+  stl_reg #(
+    .WIDTH      (1   ),                                                 //    always_ff @(posedge i_clk or negedge i_rst_n) begin
+    .RESET_VAL  (1'b0)                                                  //      if(!i_rst_n)begin
+  ) reg_unid (                                                          //        uniID <= 1'b0;
+  	.i_clk      (i_clk      ),                                          //      end else if(dMemIfDone)begin
+    .i_rst_n    (i_rst_n    ),                                 // <==>  //        uniID <= 1'b0;
+    .i_wen      (dMemIfDone | (iMemIfFree & dMemIf.valid)),             //      end else if(dMemIf.valid & iMemIfFree)begin
+    .i_din      (!dMemIfDone),                                          //        uniID <= 1'b1;
+    .o_dout     (uniID      )                                           //      end
+  );                                                                    //    end
 
   assign UniIf.valid    = uniID ? dMemIf.valid    : iMemIf.valid    ;
   assign UniIf.reqtyp   = uniID ? dMemIf.reqtyp   : iMemIf.reqtyp   ;

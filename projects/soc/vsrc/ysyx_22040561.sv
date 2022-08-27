@@ -654,17 +654,16 @@ module ysyx_22040561_top(
   wire dMemIfDone = dMemIf.valid & dMemIf.ready ;
   wire iMemIfFree = iMemIf.valid & iMemIf.ready | !iMemIf.valid ;
 
-  always_ff @(posedge i_clk or negedge i_rst_n) begin
-    if(!i_rst_n)begin
-      uniID <= 1'b0;
-    end
-    else if(dMemIfDone)begin
-      uniID <= 1'b0;
-    end
-    else if(dMemIf.valid & iMemIfFree)begin
-      uniID <= 1'b1;
-    end
-  end
+  ysyx_22040561_stl_reg #(
+    .WIDTH      (1   ),                                                 //    always_ff @(posedge i_clk or negedge i_rst_n) begin
+    .RESET_VAL  (1'b0)                                                  //      if(!i_rst_n)begin
+  ) reg_unid (                                                          //        uniID <= 1'b0;
+  	.i_clk      (i_clk      ),                                          //      end else if(dMemIfDone)begin
+    .i_rst_n    (i_rst_n    ),                                 // <==>  //        uniID <= 1'b0;
+    .i_wen      (dMemIfDone | (iMemIfFree & dMemIf.valid)),             //      end else if(dMemIf.valid & iMemIfFree)begin
+    .i_din      (!dMemIfDone),                                          //        uniID <= 1'b1;
+    .o_dout     (uniID      )                                           //      end
+  );                                                                    //    end
 
   assign UniIf.valid    = uniID ? dMemIf.valid    : iMemIf.valid    ;
   assign UniIf.reqtyp   = uniID ? dMemIf.reqtyp   : iMemIf.reqtyp   ;
@@ -2485,16 +2484,9 @@ module ysyx_22040561_lsu (
   assign dCacheIf_M.wdata  = exu_rs2_r         ;
   assign dCacheIf_M.size   = exu_lsfunc3_r[1:0];
 
-  // 3. use one register to save data, which is must keep for bypass ://///////////////////////////////////////
-  // think about this situation: 
-  // ins1 in lsu is loading data,
-  // ins2 in exu is calculate division.
-  // ins3 in idu, and the rs1id or rs2id == rdid(ins1).
-  // so the ins1 load data in lsu must be kept, until pre stage is fire (div is done).  
-
-  logic [`CPU_WIDTH-1:0] rdata, rdata_r, dCache_rdata;
+  logic [`CPU_WIDTH-1:0] dCache_rdata;
   
-  ysyx_22040561_stl_mux_default #(7, 3, `CPU_WIDTH) mux_rdata (rdata, exu_lsfunc3_r, `CPU_WIDTH'b0, {
+  ysyx_22040561_stl_mux_default #(7, 3, `CPU_WIDTH) mux_rdata (dCache_rdata, exu_lsfunc3_r, `CPU_WIDTH'b0, {
     `FUNC3_LB_SB, {{56{dCacheIf_M.rdata[ 7]}}, dCacheIf_M.rdata[ 7:0]},
     `FUNC3_LH_SH, {{48{dCacheIf_M.rdata[15]}}, dCacheIf_M.rdata[15:0]},
     `FUNC3_LW_SW, {{32{dCacheIf_M.rdata[31]}}, dCacheIf_M.rdata[31:0]},
@@ -2504,31 +2496,16 @@ module ysyx_22040561_lsu (
     `FUNC3_LWU  , {32'b0, dCacheIf_M.rdata[31:0]}                     
   });
 
-  wire dCacheIf_sh = dCacheIf_M.valid & dCacheIf_M.ready;
-
-  ysyx_22040561_stl_reg #(
-    .WIDTH      (`CPU_WIDTH   ),
-    .RESET_VAL  (`CPU_WIDTH'b0)
-  ) u_datareg (
-  	.i_clk      (i_clk        ),
-    .i_rst_n    (i_rst_n      ),
-    .i_wen      (dCacheIf_sh  ),
-    .i_din      (rdata        ),
-    .o_dout     (rdata_r      )
-  );
-
-  assign dCache_rdata = dCacheIf_sh ? rdata : rdata_r;
-
-  // 4. use pre stage signals to generate comb logic for post stage://////////////////////////////////////////
+  // 5. use pre stage signals to generate comb logic for post stage://////////////////////////////////////////
 
   assign o_lsu_lsres   = en_clint ? i_clint_rdata : dCache_rdata;
   assign o_lsu_exres   = exu_exres_r  ;
   assign o_lsu_lden    = exu_lden_r   ;
   assign o_lsu_fencei  = exu_fencei_r ;
   assign o_lsu_rdid    = exu_rdid_r   ;
-  assign o_lsu_rdwen   = exu_rdwen_r  ;
+  assign o_lsu_rdwen   = exu_rdwen_r  & pre_valid_r; // &pre_valid_r is used for bypass, to indicate lsu is valid.
   assign o_lsu_csrdid  = exu_csrdid_r ;
-  assign o_lsu_csrdwen = exu_csrdwen_r;
+  assign o_lsu_csrdwen = exu_csrdwen_r& pre_valid_r; // &pre_valid_r is used for bypass, to indicate lsu is valid.
   assign o_lsu_csrd    = exu_csrd_r   ;
   assign o_lsu_pc      = exu_pc_r     ;
   assign o_lsu_ins     = exu_ins_r    ;
