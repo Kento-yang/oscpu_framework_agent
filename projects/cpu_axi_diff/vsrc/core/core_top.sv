@@ -351,7 +351,6 @@ module core_top(
     .i_rst_n      (i_rst_n      ),
     .i_idu_rs1id  (idu_rs1id    ),
     .i_idu_rs2id  (idu_rs2id    ),
-    .i_idu_sten   (idu_sten     ),
     .i_exu_lden   (exu_lden     ),
     .i_exu_rdwen  (exu_rdwen    ),
     .i_exu_rdid   (exu_rdid     ),

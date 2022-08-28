@@ -7,7 +7,6 @@ module bypass (
   // from idu:
   input         [`REG_ADDRW-1:0]   i_idu_rs1id   ,
   input         [`REG_ADDRW-1:0]   i_idu_rs2id   ,
-  input                            i_idu_sten    ,
   // from exu:
   input                            i_exu_lden    ,
   input                            i_exu_rdwen   ,
