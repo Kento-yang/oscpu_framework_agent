@@ -3548,10 +3548,10 @@ module ysyx_22040561_dCache (
 
   // 4.2 read bus, write to victim block: //////////////////////////////////////////////////////////////////////////////////
   for (genvar i=0; i<2 ; i=i+1) begin
-    assign tary_miss_wen    [i] = dMemIf_M.valid & dMemIf_M.ready & (i == victimblk_wayid);
-    assign tary_miss_wdata  [i] = (dch_state == WBUS) ? {1'b0, victimblk_valid, victimblk_tag}: {1'b0, 1'b1, tag};  //{dirty,valid,tag};
-    // assign tary_miss_wen    [i] = (dch_state == RBUS) & dMemIf_M.ready & (i == victimblk_wayid);
-    // assign tary_miss_wdata  [i] = {1'b0, 1'b1, tag};  //{dirty,valid,tag};
+    // assign tary_miss_wen    [i] = dMemIf_miss_valid & dMemIf_M.ready & (i == victimblk_wayid);
+    // assign tary_miss_wdata  [i] = (dch_state == WBUS) ? {1'b0, victimblk_valid, victimblk_tag}: {1'b0, 1'b1, tag};  //{dirty,valid,tag};
+    assign tary_miss_wen    [i] = (dch_state == RBUS) & dMemIf_M.ready & (i == victimblk_wayid);
+    assign tary_miss_wdata  [i] = {1'b0, 1'b1, tag};  //{dirty,valid,tag};
     assign dary_miss_wen    [i] = (dch_state == RBUS) & dMemIf_M.ready & (i == victimblk_wayid);
     assign dary_miss_wstrb  [i] = 16'hffff;
     assign dary_miss_wdata  [i] = dMemIf_M.rdata;

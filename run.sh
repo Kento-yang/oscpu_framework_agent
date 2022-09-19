@@ -30,8 +30,8 @@ elif [ $1 = "interrupt" ]; then
     #bash build.sh -e cpu_axi_diff -d -s -a "-i custom-output/interrupt-test/amtest-interrupt-test.bin --dump-wave -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -w -b
     bash build.sh -e cpu_axi_diff -d -s -a "-i custom-output/interrupt-test/amtest-interrupt-test.bin -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -b
 elif [ $1 = "rt-thread" ]; then
-    #bash build.sh -e cpu_axi_diff -d -s -a "-i custom-output/rt-thread/rtthread.bin --dump-wave -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -w -b
-    bash build.sh -e cpu_axi_diff -d -s -a "-i custom-output/rt-thread/rtthread.bin -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -w -b
+    bash build.sh -e cpu_axi_diff -d -s -a "-i custom-output/rt-thread/rtthread.bin --dump-wave -b 1210000" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -w -b
+    #bash build.sh -e cpu_axi_diff -d -s -a "-i custom-output/rt-thread/rtthread.bin -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -w -b
 elif [ $1 = "coremark" ]; then
     bash build.sh -e cpu_axi_diff -d -s -a "-i custom-output/benchmark/coremark/coremark.bin" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -b
 else
