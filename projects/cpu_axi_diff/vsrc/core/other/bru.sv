@@ -48,7 +48,7 @@ module bru (
   assign sub_res = i_rs1 - i_rs2;
   assign supersub_resbit = {{1'b0,i_rs1} - {1'b0,i_rs2}}[`CPU_WIDTH];
 
-  stl_mux_default #(6,3,1) mux_branch (bjump, i_bfun3, 0, {
+  stl_mux_default #(6,3,1) mux_branch (bjump, i_bfun3, 1'b0, {
     `FUNC3_BEQ ,   ~(|sub_res)           ,
     `FUNC3_BNE ,    (|sub_res)           ,
     `FUNC3_BLT ,    sub_res[`CPU_WIDTH-1],

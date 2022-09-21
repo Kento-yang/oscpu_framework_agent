@@ -25,12 +25,14 @@ module iCache (
 
   // tag array signal:
   logic                  tary_wen   [1:0];
+  logic [6:0]            tary_addr  [1:0];
   logic [`iTARY_W-1:0]   tary_wdata [1:0];
   logic [`iTARY_W-1:0]   tary_rdata [1:0];
 
   // data array signal:
   logic                  dary_ren   [1:0];
   logic                  dary_wen   [1:0];
+  logic [6:0]            dary_addr  [1:0];
   logic [15:0]           dary_wstrb [1:0];
   logic [127:0]          dary_wdata [1:0];
   logic [127:0]          dary_rdata [1:0];
@@ -43,7 +45,7 @@ module iCache (
       .i_rst_n  (i_rst_n      ),
       .i_invalid(i_invalid    ),
       .i_wen    (tary_wen  [i]),
-      .i_addr   (index        ),
+      .i_addr   (tary_addr [i]),
       .i_din    (tary_wdata[i]),
       .o_dout   (tary_rdata[i])
     );
@@ -53,7 +55,7 @@ module iCache (
       .i_ren   (dary_ren  [i] ),
       .i_wen   (dary_wen  [i] ),
       .i_wstrb (dary_wstrb[i] ),
-      .i_addr  (index         ),
+      .i_addr  (dary_addr [i] ),
       .i_wdata (dary_wdata[i] ),
       .o_rdata (dary_rdata[i] )
     );
@@ -160,8 +162,10 @@ module iCache (
   // 7. update tag_arry & data_array:///////////////////////////////////////////////////////////////////////////////////////
   for (genvar i=0; i<2 ; i=i+1) begin
     assign tary_wen    [i] = iMemIf_M.valid & iMemIf_M.ready & (i == victim_blkid);
+    assign tary_addr   [i] = index;
     assign tary_wdata  [i] = {1'b1,tag};
     assign dary_wen    [i] = iMemIf_M.valid & iMemIf_M.ready & (i == victim_blkid);
+    assign dary_addr   [i] = index;
     assign dary_wstrb  [i] = 16'hffff;
     assign dary_wdata  [i] = iMemIf_M.rdata;
   end

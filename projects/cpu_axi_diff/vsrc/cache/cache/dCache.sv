@@ -26,12 +26,14 @@ module dCache (
 
   // tag array signal:
   logic                  tary_wen   [1:0];
+  logic [6:0]            tary_addr  [1:0];
   logic [`dTARY_W-1:0]   tary_wdata [1:0];
   logic [`dTARY_W-1:0]   tary_rdata [1:0];
 
   // data array signal:
   logic                  dary_ren   [1:0];
   logic                  dary_wen   [1:0];
+  logic [6:0]            dary_addr  [1:0];
   logic [15:0]           dary_wstrb [1:0];
   logic [127:0]          dary_wdata [1:0];
   logic [127:0]          dary_rdata [1:0];
@@ -43,7 +45,7 @@ module dCache (
       .i_clk   (i_clk         ),
       .i_rst_n (i_rst_n       ),
       .i_wen   (tary_wen  [i] ),
-      .i_addr  (cacheline_addr),
+      .i_addr  (tary_addr [i] ),
       .i_din   (tary_wdata[i] ),
       .o_dout  (tary_rdata[i] )
     );
@@ -53,7 +55,7 @@ module dCache (
       .i_ren   (dary_ren  [i] ),
       .i_wen   (dary_wen  [i] ),
       .i_wstrb (dary_wstrb[i] ),
-      .i_addr  (cacheline_addr),
+      .i_addr  (dary_addr [i] ),
       .i_wdata (dary_wdata[i] ),
       .o_rdata (dary_rdata[i] )
     );
@@ -80,7 +82,7 @@ module dCache (
   wire [3:0]      offset = dCacheIf_S.addr[  3:0];
 
   // 2. state machine: /////////////////////////////////////////////////////////////////////////////////////////////////////
-  
+
   // signals used for dch_state_n logic:
   // signals for hit:
   wire [1:0]      hit;
@@ -243,14 +245,14 @@ module dCache (
   
   // clean_cnt[7] means way, clean_cnt[6:0] means index of set.
   stl_reg #(
-    .WIDTH      (8          ),
-    .RESET_VAL  (8'hff      ) // full.
+    .WIDTH      (8              ),
+    .RESET_VAL  (8'hff          ) // full.
   ) reg_count (
-    .i_clk      (i_clk      ),
-    .i_rst_n    (i_rst_n    ),
+    .i_clk      (i_clk          ),
+    .i_rst_n    (i_rst_n        ),
     .i_wen      (dch_state_n == CLEAN_CUNT),
-    .i_din      (clean_cnt+1),
-    .o_dout     (clean_cnt  )
+    .i_din      (clean_cnt+1'b1 ),
+    .o_dout     (clean_cnt      )
   );
 
   // 5.2 read dirty cacheline, write bus: //////////////////////////////////////////////////////////////////////////////////
@@ -297,13 +299,13 @@ module dCache (
 
   // 6. all signals combination ://////////////////////////////////////////////////////////////////////////////////////////
 
-  assign cacheline_addr = i_clean ? cleanblk_index : index;
-
   for (genvar i=0; i<2 ; i=i+1) begin
     assign tary_wen    [i] = tary_miss_wen[i] | tary_hit_wen   [i] | tary_clean_wen[i];
+    assign tary_addr   [i]=  i_clean ? cleanblk_index : index;
     assign tary_wdata  [i] = tary_miss_wen[i] ? tary_miss_wdata[i] : (tary_hit_wen [i] ? tary_hit_wdata[i] : tary_clean_wdata [i]);
     assign dary_ren    [i] = dary_miss_ren[i] | dary_hit_ren   [i] | dary_clean_ren[i];
     assign dary_wen    [i] = dary_miss_wen[i] | dary_hit_wen   [i] ;
+    assign dary_addr   [i]=  i_clean ? cleanblk_index : index;
     assign dary_wstrb  [i] = dary_miss_wen[i] ? dary_miss_wstrb[i] : dary_hit_wstrb[i];
     assign dary_wdata  [i] = dary_miss_wen[i] ? dary_miss_wdata[i] : dary_hit_wdata[i];
   end

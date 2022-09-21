@@ -85,8 +85,8 @@ module wbu (
   ) postvalid (
   	.i_clk      (i_clk        ), 
     .i_rst_n    (i_rst_n      ), 
-    .i_wen      (i_flush | o_pre_ready  ), 
-    .i_din      (i_flush ? 0: i_pre_valid  ), 
+    .i_wen      (i_flush | o_pre_ready      ), 
+    .i_din      (i_flush ? 1'0: i_pre_valid ), 
     .o_dout     (o_post_valid )
   );
 
