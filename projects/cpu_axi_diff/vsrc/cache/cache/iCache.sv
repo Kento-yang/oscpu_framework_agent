@@ -61,21 +61,22 @@ module iCache (
     );
   end
 
-  logic [127:0] recent;
-  logic recent_wen, recent_wdata;
+  logic [127:0] recent, recent_wen;
+  logic recent_wdata;
 
   for (genvar i=0; i<128 ; i=i+1) begin
     stl_reg #(
-      .WIDTH      (1           ),
-      .RESET_VAL  (1'b0        )
+      .WIDTH      (1            ),
+      .RESET_VAL  (1'b0         )
     ) reg_recent (
-      .i_clk      (i_clk       ),
-      .i_rst_n    (i_rst_n     ),
-      .i_wen      (recent_wen & (index == i)),
-      .i_din      (recent_wdata),
-      .o_dout     (recent[i]   )
+      .i_clk      (i_clk        ),
+      .i_rst_n    (i_rst_n      ),
+      .i_wen      (recent_wen[i]),
+      .i_din      (recent_wdata ),
+      .o_dout     (recent[i]    )
     );
   end
+
 
   // 2. control signals: ///////////////////////////////////////////////////////////////////////////////////////////////////
   wire [`TAG_BIT] tag    = iCacheIf_S.addr[`ADR_WIDTH-1:11];
@@ -127,7 +128,10 @@ module iCache (
 
   // 4. hit, read data array, update recent: /////////////////////////////////////////////////////////////////////////////////
 
-  assign recent_wen   = (ich_state == HIT);
+  for (genvar i=0; i<128; i=i+1 ) begin
+    assign recent_wen[i] = (ich_state == HIT) & (index == i);
+  end
+
   assign recent_wdata = hit[1] ? 1'b1 : 1'b0;
 
   for (genvar i=0; i<2 ; i=i+1) begin
