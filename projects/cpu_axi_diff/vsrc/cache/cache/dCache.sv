@@ -80,6 +80,16 @@ module dCache (
   wire [3:0]      offset = dCacheIf_S.addr[  3:0];
 
   // 2. state machine: /////////////////////////////////////////////////////////////////////////////////////////////////////
+  
+  // signals used for dch_state_n logic:
+  // signals for hit:
+  wire [1:0]      hit;
+  // signals for miss, replace victim block:
+  wire            victimblk_wayid, victimblk_dirty, victimblk_valid;
+  wire [`TAG_BIT] victimblk_tag;
+  // signals for fence.i:
+  wire            clean_hit_dirtyline;
+  wire [7:0]      clean_cnt ;
 
   enum logic[2:0] {IDLE, WBUS, RBUS, HIT, CLEAN_CUNT, CLEAN_WBUS} state;
   logic [2:0] dch_state, dch_state_n;
@@ -139,7 +149,6 @@ module dCache (
 
   // 3. hit, read/write data array, update recent/dirty, update dCacheIf_S signal: ///////////////////////////////////////////
 
-  wire [1:0] hit;
   for (genvar i=0; i<2 ; i=i+1) begin
     assign hit[i] = (tary_rdata[i][`TAG_BIT] == tag) & tary_rdata[i][`VLD_BIT];
   end
@@ -189,9 +198,6 @@ module dCache (
   assign dCacheIf_miss_rdata = {hit_cacheline >> {offset,3'b0}}[`CPU_WIDTH-1:0];
 
   // 4. miss, write dirty cacheline to bus, read new cacheline from bus : ///////////////////////////////////////////////////
-  wire victimblk_wayid, victimblk_dirty, victimblk_valid;
-  wire [`TAG_BIT] victimblk_tag;
-
   assign victimblk_wayid = ~recent[index];
   assign victimblk_dirty = tary_rdata[victimblk_wayid][`DRT_BIT];
   assign victimblk_valid = tary_rdata[victimblk_wayid][`VLD_BIT];
@@ -234,8 +240,8 @@ module dCache (
   // 5. clean dCache signals.///////////////////////////////////////////////////////////////////////////////////////////////
 
   // 5.1 count cacheline times. ////////////////////////////////////////////////////////////////////////////////////////////
-  logic [7:0]           clean_cnt ;  // 8 bit. clean_cnt[7] means set.
-
+  
+  // clean_cnt[7] means way, clean_cnt[6:0] means index of set.
   stl_reg #(
     .WIDTH      (8          ),
     .RESET_VAL  (8'hff      ) // full.
@@ -262,7 +268,7 @@ module dCache (
   assign cleanblk_valid = tary_rdata[cleanblk_wayid][`VLD_BIT];
   assign cleanblk_tag   = tary_rdata[cleanblk_wayid][`TAG_BIT];
 
-  wire clean_hit_dirtyline = cleanblk_valid & cleanblk_dirty;
+  assign clean_hit_dirtyline = cleanblk_valid & cleanblk_dirty;
 
   for (genvar i=0; i<2 ; i=i+1) begin
     assign tary_clean_wen   [i] = (i == clean_cnt[7]) & (dch_state == CLEAN_WBUS) & dMemIf_M.ready;

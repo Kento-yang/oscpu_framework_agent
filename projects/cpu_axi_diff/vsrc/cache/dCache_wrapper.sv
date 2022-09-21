@@ -13,10 +13,15 @@ module dCache_wrapper (
       reserve             0x0201_0000~0x0fff_ffff
      UART16550            0x1000_0000~0x1000_0fff
     SPI controller        0x1000_1000~0x1000_1fff
-      reserve             0x1000_2000~0x2fff_ffff
+        SPI	              0x1000_1000~0x1000_1fff
+        VGA	              0x1000_2000~0x1000_2fff
+        PS2	              0x1000_3000~0x1000_3fff
+      Ethernet	          0x1000_4000~0x1000_4fff
+      Reserve	            0x1000_5000~0x2fff_ffff
   SPI-flash XIP mode      0x3000_0000~0x3fff_ffff
     ChipLink MMIO         0x4000_0000~0x7fff_ffff
-       memory             0x8000_0000~0xffff_ffff
+       MEM	              0x8000_0000~0xfbff_ffff
+      SDRAM	              0xfc00_0000~0xffff_ffff
 */
 
   // in this module, choose cachable memory, or uncachable device.

@@ -64,9 +64,6 @@ module lsu (
   //                 |REG|
   // o_pre_ready <-- ⌊____⌋ <-- i_post_ready
 
-  assign o_pre_ready = o_post_valid & i_post_ready | !pre_valid_r ;
-
-  wire pre_sh = i_pre_valid & o_pre_ready;
   wire pre_valid_r;
 
   stl_reg #(
@@ -80,14 +77,16 @@ module lsu (
     .o_dout     (pre_valid_r )
   );
 
-  assign o_post_valid   = (exu_fencei_r | ldst_en & en_axi) ? dCacheIf_M.ready : pre_valid_r;
+  wire ldst_en, en_axi, exu_fencei_r, pre_sh;
+  assign o_post_valid = (exu_fencei_r | ldst_en & en_axi) ? dCacheIf_M.ready : pre_valid_r;
+  assign o_pre_ready  = o_post_valid & i_post_ready | !pre_valid_r ;
+  assign pre_sh       = i_pre_valid & o_pre_ready;
 
   logic  [`CPU_WIDTH-1:0]  exu_exres_r    ;
   logic  [`CPU_WIDTH-1:0]  exu_rs2_r      ;
   logic  [2:0]             exu_lsfunc3_r  ;
   logic                    exu_lden_r     ;
   logic                    exu_sten_r     ;
-  logic                    exu_fencei_r   ;
   logic  [`REG_ADDRW-1:0]  exu_rdid_r     ;
   logic                    exu_rdwen_r    ;
   logic  [`CSR_ADDRW-1:0]  exu_csrdid_r   ;
@@ -109,15 +108,18 @@ module lsu (
   );
 
   // 2. deal with device :///////////////////////////////////////////////////////////////////////////////////////
-  wire load_en  = pre_valid_r & exu_lden_r;
-  wire stor_en  = pre_valid_r & exu_sten_r;
-  wire ldst_en  = load_en | stor_en ;
 
-  wire [`ADR_WIDTH-1:0] lsu_addr = exu_exres_r[`ADR_WIDTH-1:0];
+  wire load_en, stor_en, en_clint;
+  wire [`ADR_WIDTH-1:0] lsu_addr;
+
+  assign load_en  = pre_valid_r & exu_lden_r;
+  assign stor_en  = pre_valid_r & exu_sten_r;
+  assign ldst_en  = load_en | stor_en ;
+  assign lsu_addr = exu_exres_r[`ADR_WIDTH-1:0];
 
   // `CLINT_BASE_ADDR == 32'h02000000, `CLINT_END_ADDR == 32'h0200ffff
-  wire en_clint = (lsu_addr & {{(`ADR_WIDTH-16){1'b1}},16'b0}) == `CLINT_BASE_ADDR;
-  wire en_axi   = !en_clint;
+  assign en_clint = (lsu_addr & {{(`ADR_WIDTH-16){1'b1}},16'b0}) == `CLINT_BASE_ADDR;
+  assign en_axi   = !en_clint;
 
   // 3. deal with clint :///////////////////////////////////////////////////////////////////////////////////////
 

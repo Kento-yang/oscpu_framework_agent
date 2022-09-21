@@ -73,7 +73,7 @@ module uni2axi # (
   end
 
   // ------------------Number of transmission------------------
-  reg [7:0] len;
+  logic [7:0] len, axi_len;
   always @(posedge i_clk) begin
       if (!i_rst_n) begin
           len <= 0;
@@ -98,8 +98,8 @@ module uni2axi # (
                                       | ({AXI_STRB_WIDTH{size_h}} & {8'b0000_0011})
                                       | ({AXI_STRB_WIDTH{size_w}} & {8'b0000_1111})) << offset;
 
+  assign                    axi_len  = UniIf_S.cachable ? (TRANS_LEN - 1) : 0;
   wire [2:0]                axi_size = {1'b0,UniIf_S.size};
-  wire [7:0]                axi_len  = UniIf_S.cachable ? (TRANS_LEN - 1) : 0;
   wire [AXI_ADDR_WIDTH-1:0] axi_addr = {{(AXI_ADDR_WIDTH-UNI_ADDR_WIDTH){1'b0}},UniIf_S.addr[UNI_ADDR_WIDTH-1:2], is_uart ? UniIf_S.addr[1:0]: 2'b00};
 
   wire [AXI_ID_WIDTH-1:0]   axi_id   = {AXI_ID_WIDTH{1'b0}};

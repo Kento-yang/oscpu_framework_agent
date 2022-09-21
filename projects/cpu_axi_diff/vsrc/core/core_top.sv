@@ -28,7 +28,7 @@ module core_top(
   logic                   wbu_valid , wbu_ready;  // pipeline shakehands: ls/wb -> wb/reg.
   logic                   iru_excp  , iru_intr;
   logic                   wbu_commit;             // wbu_valid & wbu_ready & !iru_intr.
-  logic                   unif_trans_done, iru_flush, fence_flush;
+  logic                   unif_trans_done, iru_flush, fence_flush, lsu_fencei;
   logic                   ifu_flush, idu_flush, exu_flush, lsu_flush, wbu_flush;
 
   assign unif_trans_done = (iCacheIf_M.valid & iCacheIf_M.ready | !iCacheIf_M.valid);
@@ -203,7 +203,6 @@ module core_top(
   logic [`CPU_WIDTH-1:0]      lsu_exres  ;
   logic [`CPU_WIDTH-1:0]      lsu_lsres  ;
   logic                       lsu_lden   ;
-  logic                       lsu_fencei ;
   logic [`REG_ADDRW-1:0]      lsu_rdid   ;
   logic                       lsu_rdwen  ;
   logic [`CSR_ADDRW-1:0]      lsu_csrdid ;

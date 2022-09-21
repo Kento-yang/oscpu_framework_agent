@@ -19,6 +19,16 @@ module idu_system(
 
   // when reach here, opcode must be `TYPE_SYS, so it is senseless to case opcode.
 
+  wire [2:0] func3;
+  wire [4:0] uimm ;
+
+  assign o_csrsid = i_ins[31:20];
+  assign o_csrdid = i_ins[31:20];
+  assign o_rs1id  = i_ins[19:15];
+  assign uimm     = i_ins[19:15];
+  assign func3    = i_ins[14:12];
+  assign o_rdid   = i_ins[11: 7];
+
   wire csrrw  = (func3 == `FUNC3_CSRRW );
   wire csrrs  = (func3 == `FUNC3_CSRRS );
   wire csrrc  = (func3 == `FUNC3_CSRRC );
@@ -27,16 +37,6 @@ module idu_system(
   wire csrrci = (func3 == `FUNC3_CSRRCI);
   wire rdneq0 = |o_rdid ;     // rd id not qual to zero.
   wire rsneq0 = |o_rs1id;     // rs id not qual to zero.
-
-  wire [2:0] func3;
-  wire [4:0] uimm  ;
-
-  assign o_csrsid = i_ins[31:20];
-  assign o_csrdid = i_ins[31:20];
-  assign o_rs1id  = i_ins[19:15];
-  assign uimm     = i_ins[19:15];
-  assign func3    = i_ins[14:12];
-  assign o_rdid   = i_ins[11: 7];
 
   assign o_csrsren =  ((csrrw | csrrwi) & rdneq0) | (csrrs | csrrsi | csrrc | csrrci);
 
