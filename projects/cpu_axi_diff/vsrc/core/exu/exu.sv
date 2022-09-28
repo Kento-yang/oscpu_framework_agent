@@ -33,8 +33,10 @@ module exu (
   input  logic                       i_idu_csrdwen , // csr dest write enable.
   // 2.4 dealy for bru/wbu:
   input  logic  [`CPU_WIDTH-1:0]     i_idu_pc      ,
-  input  logic  [`INS_WIDTH-1:0]     i_idu_ins     ,
+  input  logic                       i_idu_ecall   ,
+  input  logic                       i_idu_mret    ,
   input  logic                       i_idu_nop     ,
+  input  logic  [`INS_WIDTH-1:0]     s_idu_ins     ,
 
   // 3. output comb signal to post stage:
   // 3.1 for lsu: 
@@ -51,8 +53,10 @@ module exu (
   output logic                       o_exu_csrdwen , // csr dest write enable.
   output logic  [`CPU_WIDTH-1:0]     o_exu_csrd    ,
   output logic  [`CPU_WIDTH-1:0]     o_exu_pc      ,
-  output logic  [`INS_WIDTH-1:0]     o_exu_ins     ,
-  output logic                       o_exu_nop
+  output logic                       o_exu_ecall   ,
+  output logic                       o_exu_mret    ,
+  output logic                       o_exu_nop     ,
+  output logic  [`INS_WIDTH-1:0]     s_exu_ins
 );
 
   // 1. shake hands://///////////////////////////////////////////////////////////////////////////////////////
@@ -110,18 +114,20 @@ module exu (
   logic                        idu_csrdwen_r ;
   logic  [`CPU_WIDTH-1:0]      idu_pc_r      ;
   logic  [`INS_WIDTH-1:0]      idu_ins_r     ;
+  logic                        idu_ecall_r   ;
+  logic                        idu_mret_r    ;
   logic                        idu_nop_r     ;
 
-  parameter EXREG_WIDTH = 5*`CPU_WIDTH+`REG_ADDRW+11+`EXU_SEL_WIDTH+`EXU_OPT_WIDTH+`CSR_OPT_WIDTH+`CSR_ADDRW+`INS_WIDTH;
+  parameter EXREG_WIDTH = 5*`CPU_WIDTH+`REG_ADDRW+13+`EXU_SEL_WIDTH+`EXU_OPT_WIDTH+`CSR_OPT_WIDTH+`CSR_ADDRW+`INS_WIDTH;
 
   logic [EXREG_WIDTH-1:0] reg_din, reg_dout;
 
   assign reg_din = {i_flush | i_pre_nop ? {(EXREG_WIDTH-1){1'b0}} : {i_idu_sysins, i_idu_imm, i_idu_rs1, i_idu_rs2, i_idu_csrs, i_idu_exsrc, i_idu_exopt, i_idu_excsrsrc,
-                     i_idu_excsropt, i_idu_lsfunc3, i_idu_lden, i_idu_sten, i_idu_fencei, i_idu_rdid, i_idu_rdwen, i_idu_csrdid, i_idu_csrdwen, i_idu_pc, i_idu_ins},
+                     i_idu_excsropt, i_idu_lsfunc3, i_idu_lden, i_idu_sten, i_idu_fencei, i_idu_rdid, i_idu_rdwen, i_idu_csrdid, i_idu_csrdwen, i_idu_pc, i_idu_ecall, i_idu_mret, s_idu_ins},
                     i_flush ? 1'b0 : {i_pre_nop | i_idu_nop} };
 
   assign {idu_sysins_r, idu_imm_r, idu_rs1_r, idu_rs2_r, idu_csrs_r, idu_exsrc_r, idu_exopt_r, idu_excsrsrc_r, idu_excsropt_r, idu_lsfunc3_r,
-          idu_lden_r, idu_sten_r, idu_fencei_r, idu_rdid_r, idu_rdwen_r, idu_csrdid_r, idu_csrdwen_r, idu_pc_r, idu_ins_r, idu_nop_r} = reg_dout;
+          idu_lden_r, idu_sten_r, idu_fencei_r, idu_rdid_r, idu_rdwen_r, idu_csrdid_r, idu_csrdwen_r, idu_pc_r, idu_ecall_r, idu_mret_r, idu_ins_r, idu_nop_r} = reg_dout;
 
   stl_reg #(
     .WIDTH      (EXREG_WIDTH),
@@ -183,24 +189,32 @@ module exu (
   logic [`CPU_WIDTH-1:0] int_res, mul_res, div_res;
 
   // 4.2 generate integer alu result: ////////////////////////////////////////////////////////////////////////////////////////
+  wire [63:0]   add_result  = src1 + src2;
+  wire [63:0]   sub_result  = src1 - src2;
+  wire [127:0]  sra_intern  = {{{64{src1[63]}},src1} >> src2[5:0]};
+  wire [63:0]   sra_result  = sra_intern[63:0];
+  wire [63:0]   slt_result  = {63'b0, sub_result[63]};
+  wire [64:0]   sltu_intern = {1'b0,src1} - {1'b0,src2};
+  wire [63:0]   sltu_result = {63'b0 , sltu_intern[64]};     
+
   always @(*) begin
     alu_int = 1'b1;
     case (idu_exopt_r)
-      `EXU_ADD:   int_res = src1 + src2;
-      `EXU_SUB:   int_res = src1 - src2;
-      `EXU_ADDW:  begin int_res[31:0] = src1[31:0] + src2[31:0];               int_res = {{32{int_res[31]}},int_res[31:0]};end
-      `EXU_SUBW:  begin int_res[31:0] = src1[31:0] - src2[31:0];               int_res = {{32{int_res[31]}},int_res[31:0]};end
+      `EXU_ADD:   int_res = add_result;
+      `EXU_SUB:   int_res = sub_result;
+      `EXU_ADDW:  begin int_res[31:0] = src1[31:0] + src2[31:0];               int_res[63:32] = {32{int_res[31]}};  end
+      `EXU_SUBW:  begin int_res[31:0] = src1[31:0] - src2[31:0];               int_res[63:32] = {32{int_res[31]}};  end
       `EXU_AND:   int_res = src1 & src2;
       `EXU_OR:    int_res = src1 | src2;
       `EXU_XOR:   int_res = src1 ^ src2;
       `EXU_SLL:   int_res = src1 << src2[5:0];
       `EXU_SRL:   int_res = src1 >> src2[5:0];
-      `EXU_SRA:   int_res = {{{64{src1[63]}},src1} >> src2[5:0]}[63:0];
-      `EXU_SLLW:  begin int_res[31:0] = src1[31:0] << src2[4:0];               int_res = {{32{int_res[31]}},int_res[31:0]}; end
-      `EXU_SRLW:  begin int_res[31:0] = src1[31:0] >> src2[4:0];               int_res = {{32{int_res[31]}},int_res[31:0]}; end
-      `EXU_SRAW:  begin int_res = {{32{src1[31]}}, src1[31:0]} >> src2[4:0];   int_res = {{32{int_res[31]}},int_res[31:0]}; end
-      `EXU_SLT:   begin int_res = {63'b0 , {src1 - src2}[63] };                                                             end
-      `EXU_SLTU:  begin int_res = {63'b0 , {{1'b0,src1} - {1'b0,src2}}[64] };                                               end
+      `EXU_SRA:   int_res = sra_result;
+      `EXU_SLLW:  begin int_res[31:0] = src1[31:0] << src2[4:0];               int_res[63:32] = {32{int_res[31]}};  end
+      `EXU_SRLW:  begin int_res[31:0] = src1[31:0] >> src2[4:0];               int_res[63:32] = {32{int_res[31]}};  end
+      `EXU_SRAW:  begin int_res = {{32{src1[31]}}, src1[31:0]} >> src2[4:0];   int_res[63:32] = {32{int_res[31]}};  end
+      `EXU_SLT:   int_res = slt_result;
+      `EXU_SLTU:  int_res = sltu_result;
       default:    begin int_res = `CPU_WIDTH'b0; alu_int = 1'b0; end
     endcase
   end
@@ -291,7 +305,9 @@ module exu (
   assign o_exu_csrdwen = idu_csrdwen_r;
   assign o_exu_csrd    = sys_csrres   ;
   assign o_exu_pc      = idu_pc_r     ;
-  assign o_exu_ins     = idu_ins_r    ;
+  assign o_exu_ecall   = idu_ecall_r  ;
+  assign o_exu_mret    = idu_mret_r   ;
   assign o_exu_nop     = idu_nop_r    ;
+  assign s_exu_ins     = idu_ins_r    ;
 
 endmodule
