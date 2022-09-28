@@ -70,7 +70,7 @@ module top(
 
   core_top u_core_top(
     .i_clk            (i_clk            ),
-    .i_rst_n          (i_rst_n          ),
+    .i_rst_n          (rst_n_sync       ),
     .iCacheIf_M       (iCacheIf         ),
     .dCacheIf_M       (dCacheIf         ),
     .o_invalidIChe    (invalidIChe      ),
@@ -85,7 +85,7 @@ module top(
 
   iCache_wrapper u_iCache_wrapper(
     .i_clk      (i_clk        ),
-    .i_rst_n    (i_rst_n      ),
+    .i_rst_n    (rst_n_sync   ),
     .i_invalid  (invalidIChe  ),
     .iCacheIf_S (iCacheIf     ),
     .iMemIf_M   (iMemIf       )
@@ -93,7 +93,7 @@ module top(
 
   dCache_wrapper u_dCache_wrapper(
     .i_clk      (i_clk      ),
-    .i_rst_n    (i_rst_n    ),
+    .i_rst_n    (rst_n_sync ),
     .i_clean    (cleanDChe  ),
     .dCacheIf_S (dCacheIf   ),
     .dMemIf_M   (dMemIf     )
@@ -112,7 +112,7 @@ module top(
     .RESET_VAL  (1'b0)                                                                   //   if(!i_rst_n)begin
   ) reg_unid (                                                                           //     uniID <= 1'b0;
   	.i_clk      (i_clk      ),                                                           //   end else if(dMemIf.valid & iMemIfFree)begin
-    .i_rst_n    (i_rst_n    ),                                                  // <==>  //     uniID <= 1'b1;
+    .i_rst_n    (rst_n_sync ),                                                  // <==>  //     uniID <= 1'b1;
     .i_wen      ((iMemIf.valid & dMemIfFree) | (dMemIf.valid & iMemIfFree)),             //   end else if(iMemIf.valid & dMemIfFree)begin
     .i_din      ((dMemIf.valid & iMemIfFree)),                                           //     uniID <= 1'b0;
     .o_dout     (uniID      )                                                            //   end
