@@ -31,7 +31,7 @@ module dCache (
   logic [`dTARY_W-1:0]   tary_rdata [1:0];
 
   // data array signal:
-  logic                  dary_ren   [1:0];
+  logic                  dary_ren   [1:0];  
   logic                  dary_wen   [1:0];
   logic [6:0]            dary_addr  [1:0];
   logic [15:0]           dary_wstrb [1:0];

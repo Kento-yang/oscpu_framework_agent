@@ -1,8 +1,8 @@
 #!/bin/bash
 
-if [ $2 = "clean" ]; then
-    rm -rf /home/dingyawei/oscpu-framework/projects/cpu_axi_diff/build
-fi
+#if [ $2 = "clean" ]; then
+#    rm -rf /home/dingyawei/oscpu-framework/projects/cpu_axi_diff/build
+#fi
 
 if [ $1 = "fencei" ]; then
     #bash build.sh -e cpu_axi_diff -d -s -a "-i non-output/cpu-tests-fencei/matrix-mulw-riscv64-npc.bin --dump-wave -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -w -b
@@ -25,6 +25,8 @@ elif [ $1 = "rt-thread" ]; then
     #bash build.sh -e cpu_axi_diff -d -s -a "-i custom-output/rt-thread/rtthread.bin -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -w -b
 elif [ $1 = "coremark" ]; then
     bash build.sh -e cpu_axi_diff -d -s -a "-i custom-output/benchmark/coremark/coremark.bin" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -b
+elif [ $1 = "clean" ]; then
+    rm -rf /home/dingyawei/oscpu-framework/projects/cpu_axi_diff/build
 else
     #bash build.sh -e cpu_axi_diff -d -s -a "-i non-output/cpu-tests/$1-cpu-tests.bin --dump-wave -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -w -b
     bash build.sh -e cpu_axi_diff -d -s -a "-i non-output/riscv-tests/$1-riscv-tests.bin --dump-wave -b 0" -m "EMU_TRACE=1 WITH_DRAMSIM3=1" -w -b

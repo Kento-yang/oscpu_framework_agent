@@ -333,7 +333,7 @@ module core_top(
     .i_wbu_mret      (wbu_mret        ),
     .i_wbu_nop       (wbu_nop         ),
     .o_iru_excp      (iru_excp        ),
-    .o_iru_intr      (iru_intr        ),
+    .o_iru_intr      (iru_intr        ),//timer
     .o_iru_pc        (iru_pc          ),
     .i_mie           (mie             ),
     .i_mip           (mip             ),
@@ -377,7 +377,7 @@ module core_top(
     .i_lsu_lsres  (lsu_lsres    ),
     .i_wbu_rdwen  (wbu_rdwen    ),
     .i_wbu_rdid   (wbu_rdid     ),
-    .i_wbu_rd     (wbu_rd       ),
+    .i_wbu_rd     (wbu_rd       ),//wdata
     .o_idu_rs1    (idu_rs1      ),
     .o_idu_rs2    (idu_rs2      ),
     .o_idex_nop   (idex_nop     ),
