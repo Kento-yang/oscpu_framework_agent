@@ -8,37 +8,38 @@ module dCache (
 );
 
   //1. dCache : ////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-  //          |<------16 bytes---->|                |<------16 bytes---->|
-  //   ⌈‾‾‾‾‾⌉ ⌈‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾⌉         ⌈‾‾‾‾‾⌉ ⌈‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾⌉ ——
-  //   |    | |                    |        |     | |                   |  ↑
-  //   |    | |                    |        |     | |                   |  |
-  //   |    | |                    |        |     | |                   |  |
-  //   |    | |                    |        |     | |                   |  |
-  //   |Tag0| |    Cacheline0      |        |Tag1 | |    Cacheline1     |  |128 sets.
-  //   |    | |                    |        |     | |                   |  |
-  //   |    | |                    |        |     | |                   |  |
-  //   |    | |                    |        |     | |                   |  |
-  //   |    | |                    |        |     | |                   |  ↓
-  //   ⌊_____⌋ ⌊____________________⌋         ⌊_____⌋ ⌊____________________⌋ ——
-
+  //    128 sets. cacheline=16Bytes
+  // 
+  //          |<------16 bytes---->|                |<------16 bytes---->|             |<------16 bytes---->|           |<------16 bytes---->|               
+  //   ⌈‾‾‾‾‾⌉ ⌈‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾⌉        ⌈‾‾‾‾‾⌉ ⌈‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾⌉ ——    ⌈‾‾‾‾‾⌉ ⌈‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾⌉    ⌈‾‾‾‾‾⌉ ⌈‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾⌉ 
+  //   |    | |                    |       |     | |                   |  ↑    |     | |                   |   |     | |                   |  
+  //   |    | |                    |       |     | |                   |  |    |     | |                   |   |     | |                   |  
+  //   |    | |                    |       |     | |                   |  |    |     | |                   |   |     | |                   |  
+  //   |    | |                    |       |     | |                   |  |    |     | |                   |   |     | |                   |  
+  //   |Tag0| |    Cacheline0      |       |Tag1 | |    Cacheline1     |  |    |Tag2 | |    Cacheline2     |   |Tag3 | |    Cacheline3     |  
+  //   |    | |                    |       |     | |                   |  |    |     | |                   |   |     | |                   |  
+  //   |    | |                    |       |     | |                   |  |    |     | |                   |   |     | |                   |  
+  //   |    | |                    |       |     | |                   |  |    |     | |                   |   |     | |                   |  
+  //   |    | |                    |       |     | |                   |  ↓    |     | |                   |   |     | |                   |  
+  //   ⌊_____⌋ ⌊____________________⌋        ⌊_____⌋ ⌊____________________⌋ ——    ⌊_____⌋ ⌊____________________⌋    ⌊_____⌋ ⌊____________________⌋ 
+  
   logic [6:0]            cacheline_addr  ;
 
   // tag array signal:
-  logic                  tary_wen   [1:0];
-  logic [6:0]            tary_addr  [1:0];
-  logic [`dTARY_W-1:0]   tary_wdata [1:0];
-  logic [`dTARY_W-1:0]   tary_rdata [1:0];
+  logic                  tary_wen   [3:0];
+  logic [6:0]            tary_addr  [3:0];
+  logic [`dTARY_W-1:0]   tary_wdata [3:0];
+  logic [`dTARY_W-1:0]   tary_rdata [3:0];
 
   // data array signal:
-  logic                  dary_ren   [1:0];  
-  logic                  dary_wen   [1:0];
-  logic [6:0]            dary_addr  [1:0];
-  logic [15:0]           dary_wstrb [1:0];
-  logic [127:0]          dary_wdata [1:0];
-  logic [127:0]          dary_rdata [1:0];
+  logic                  dary_ren   [3:0];  
+  logic                  dary_wen   [3:0];
+  logic [6:0]            dary_addr  [3:0];
+  logic [15:0]           dary_wstrb [3:0];
+  logic [127:0]          dary_wdata [3:0];
+  logic [127:0]          dary_rdata [3:0];
 
-  for (genvar i=0; i<2 ; i=i+1) begin
+  for (genvar i=0; i<4 ; i=i+1) begin
     dCache_tag_ary #(
       .DATA_WIDTH (`dTARY_W)
     ) u_tag_ary(
@@ -61,13 +62,14 @@ module dCache (
     );
   end
 
-  logic [127:0] recent, recent_wen;
-  logic recent_wdata;
+  logic [127:0]  recent_wen;
+  logic [2:0]   recent [127:0] ;//00x 01x 1x0 1x1 == way0 1 2 3
+  logic [2:0]   recent_wdata;
 
   for (genvar i=0; i<128 ; i=i+1) begin
     stl_reg #(
-      .WIDTH      (1            ),
-      .RESET_VAL  (1'b0         )
+      .WIDTH      (3            ),
+      .RESET_VAL  (3'b000         )
     ) reg_recent (
       .i_clk      (i_clk        ),
       .i_rst_n    (i_rst_n      ),
@@ -85,13 +87,13 @@ module dCache (
 
   // signals used for dch_state_n logic:
   // signals for hit:
-  wire [1:0]      hit;
+  wire [3:0]      hit;
   // signals for miss, replace victim block:
-  wire            victimblk_wayid, victimblk_dirty, victimblk_valid;
+  wire [1:0]      victimblk_wayid, victimblk_dirty, victimblk_valid;//2'd0,2'd1,2'd2,2'd3 for way 0/1/2/3
   wire [`TAG_BIT] victimblk_tag;
   // signals for fence.i:
   wire            clean_hit_dirtyline;
-  wire [7:0]      clean_cnt ;
+  wire [8:0]      clean_cnt ;//[8:7] for way0~3,[6:0] for index 128 sets
 
   enum logic[2:0] {IDLE, WBUS, RBUS, HIT, CLEAN_CUNT, CLEAN_WBUS} state;
   logic [2:0] dch_state, dch_state_n;
@@ -133,12 +135,12 @@ module dCache (
       HIT:        dch_state_n = IDLE;
       CLEAN_CUNT: if(clean_hit_dirtyline)
                     dch_state_n = CLEAN_WBUS;
-                  else if(clean_cnt == 8'hff)
+                  else if(clean_cnt == 9'h1ff)
                     dch_state_n = IDLE;
                   else
                     dch_state_n = CLEAN_CUNT;
       CLEAN_WBUS: if(dMemIf_M.ready)begin
-                    if(clean_cnt == 8'hff)
+                    if(clean_cnt == 9'h1ff)
                       dch_state_n = IDLE;
                     else
                       dch_state_n = CLEAN_CUNT;
@@ -151,30 +153,34 @@ module dCache (
 
   // 3. hit, read/write data array, update recent/dirty, update dCacheIf_S signal: ///////////////////////////////////////////
 
-  for (genvar i=0; i<2 ; i=i+1) begin
+  for (genvar i=0; i<4 ; i=i+1) begin
     assign hit[i] = (tary_rdata[i][`TAG_BIT] == tag) & tary_rdata[i][`VLD_BIT];
   end
 
-  logic                 tary_hit_wen   [1:0];
-  logic [`dTARY_W-1:0]  tary_hit_wdata [1:0];
-  logic                 dary_hit_ren   [1:0];
-  logic                 dary_hit_wen   [1:0];
-  logic [15:0]          dary_hit_wstrb [1:0];
-  logic [127:0]         dary_hit_wdata [1:0];
+  logic                 tary_hit_wen   [3:0];
+  logic [`dTARY_W-1:0]  tary_hit_wdata [3:0];
+  logic                 dary_hit_ren   [3:0];
+  logic                 dary_hit_wen   [3:0];
+  logic [15:0]          dary_hit_wstrb [3:0];
+  logic [127:0]         dary_hit_wdata [3:0];
 
   // 3.1 update recent://////////////////////////////////////////////////////////////////////////////////////////////////////
   for (genvar i=0; i<128; i=i+1 ) begin
     assign recent_wen[i] = (dch_state == HIT) & (index == i);
   end
-  assign recent_wdata = hit[1];
 
+  assign recent_wdata =  |hit[3:2] ? {1'b0, recent_wdata[1], 1'b0}:
+                        (|hit[1:0] ? {1'b1, 1'b1, recent_wdata[0]}
+                        : recent_wdata);//PLRU
   // 3.2 read data array: ///////////////////////////////////////////////////////////////////////////////////////////////////
-  for (genvar i=0; i<2 ; i=i+1) begin
+  for (genvar i=0; i<4 ; i=i+1) begin
     assign dary_hit_ren  [i] = (dch_state_n == HIT) & hit[i] & (dCacheIf_S.reqtyp == `REQ_READ);
   end
 
-  wire [127:0] hit_cacheline = hit[1] ? dary_rdata[1] : (hit[0] ? dary_rdata[0] : 128'b0);
-
+  wire [127:0] hit_cacheline = hit[3]  ? dary_rdata[3] :
+                               hit[2]  ? dary_rdata[2] :
+                               hit[1]  ? dary_rdata[1] : 
+                               hit[0]  ? dary_rdata[0] : 128'b0;
   // 3.3 write data array, update tag array dirty bit: ///////////////////////////////////////////////////////////////////////
   wire [7:0] wstrb;
   stl_mux_default #(4, 2, 8) mux_size (wstrb, dCacheIf_S.size, 8'b0, {
@@ -184,7 +190,7 @@ module dCache (
     2'b11 , 8'b1111_1111  // 8 byte.
   });
 
-  for (genvar i=0; i<2 ; i=i+1) begin
+  for (genvar i=0; i<4 ; i=i+1) begin
     assign tary_hit_wen   [i] = (dCacheIf_S.reqtyp == `REQ_WRITE) & (dch_state == HIT) & hit[i];
     assign tary_hit_wdata [i] = {1'b1,tary_rdata[i][`dTARY_W-2:0]};       // dirty bit <= 1;
     assign dary_hit_wen   [i] = (dCacheIf_S.reqtyp == `REQ_WRITE) & (dch_state == HIT) & hit[i];
@@ -202,25 +208,35 @@ module dCache (
   assign dCacheIf_miss_rdata = hit_cacheline_shift[`CPU_WIDTH-1:0];
 
   // 4. miss, write dirty cacheline to bus, read new cacheline from bus : ///////////////////////////////////////////////////
-  assign victimblk_wayid = ~recent[index];
+    //PLRU: 0 choose left tree,1 choose right tree
+  //          recent[2]:0
+  //       /              \       
+  //      /                \
+  //  recent[1]:0      recent[0]:0
+  //    /  \              /  \
+  // way0 way1           way2 way3
+  assign victimblk_wayid = (recent[index][2] == 1'b0) ?
+                           (recent[index][1] == 1'b0) ? 2'd0 : 2'd1 : 
+                           (recent[index][0] == 1'b0) ? 2'd2 : 2'd3 ;
+
   assign victimblk_dirty = tary_rdata[victimblk_wayid][`DRT_BIT];
   assign victimblk_valid = tary_rdata[victimblk_wayid][`VLD_BIT];
   assign victimblk_tag   = tary_rdata[victimblk_wayid][`TAG_BIT];
 
-  logic                 tary_miss_wen   [1:0];
-  logic [`dTARY_W-1:0]  tary_miss_wdata [1:0];
-  logic                 dary_miss_ren   [1:0];
-  logic                 dary_miss_wen   [1:0];
-  logic [15:0]          dary_miss_wstrb [1:0];
-  logic [127:0]         dary_miss_wdata [1:0];
+  logic                 tary_miss_wen   [3:0];
+  logic [`dTARY_W-1:0]  tary_miss_wdata [3:0];
+  logic                 dary_miss_ren   [3:0];
+  logic                 dary_miss_wen   [3:0];
+  logic [15:0]          dary_miss_wstrb [3:0];
+  logic [127:0]         dary_miss_wdata [3:0];
 
   // 4.1 read dirty victim block, write bus: ///////////////////////////////////////////////////////////////////////////////
-  for (genvar i=0; i<2 ; i=i+1) begin
+  for (genvar i=0; i<4 ; i=i+1) begin
     assign dary_miss_ren  [i] = (dch_state_n == WBUS) & (i == victimblk_wayid);
   end
 
   // 4.2 read bus, write to victim block: //////////////////////////////////////////////////////////////////////////////////
-  for (genvar i=0; i<2 ; i=i+1) begin
+  for (genvar i=0; i<4 ; i=i+1) begin
     // assign tary_miss_wen    [i] = dMemIf_miss_valid & dMemIf_M.ready & (i == victimblk_wayid);
     // assign tary_miss_wdata  [i] = (dch_state == WBUS) ? {1'b0, victimblk_valid, victimblk_tag}: {1'b0, 1'b1, tag};  //{dirty,valid,tag};
     assign tary_miss_wen    [i] = (dch_state == RBUS) & dMemIf_M.ready & (i == victimblk_wayid);
@@ -245,10 +261,10 @@ module dCache (
 
   // 5.1 count cacheline times. ////////////////////////////////////////////////////////////////////////////////////////////
   
-  // clean_cnt[7] means way, clean_cnt[6:0] means index of set.
+  // clean_cnt[8:7] means way, clean_cnt[6:0] means index of set.
   stl_reg #(
-    .WIDTH      (8              ),
-    .RESET_VAL  (8'hff          ) // full.
+    .WIDTH      (9              ),
+    .RESET_VAL  (9'h1ff          ) // full.
   ) reg_count (
     .i_clk      (i_clk          ),
     .i_rst_n    (i_rst_n        ),
@@ -258,26 +274,27 @@ module dCache (
   );
 
   // 5.2 read dirty cacheline, write bus: //////////////////////////////////////////////////////////////////////////////////
-  logic                 cleanblk_wayid, cleanblk_dirty, cleanblk_valid;
+  logic [1:0]           cleanblk_wayid, cleanblk_dirty, cleanblk_valid;
   logic [6:0]           cleanblk_index;
   logic [`TAG_W-1:0]    cleanblk_tag;
 
-  logic                 tary_clean_wen   [1:0];
-  logic [`dTARY_W-1:0]  tary_clean_wdata [1:0];
-  logic                 dary_clean_ren   [1:0];
+  logic                 tary_clean_wen   [3:0];
+  logic [`dTARY_W-1:0]  tary_clean_wdata [3:0];
+  logic                 dary_clean_ren   [3:0];
 
   assign cleanblk_index = clean_cnt[6:0];
-  assign cleanblk_wayid = clean_cnt[7];
+  assign cleanblk_wayid = clean_cnt[8:7];//2'b0,1,2,3 means way0/1/2/3
+
   assign cleanblk_dirty = tary_rdata[cleanblk_wayid][`DRT_BIT];
   assign cleanblk_valid = tary_rdata[cleanblk_wayid][`VLD_BIT];
   assign cleanblk_tag   = tary_rdata[cleanblk_wayid][`TAG_BIT];
 
   assign clean_hit_dirtyline = cleanblk_valid & cleanblk_dirty;
 
-  for (genvar i=0; i<2 ; i=i+1) begin
-    assign tary_clean_wen   [i] = (i == clean_cnt[7]) & (dch_state == CLEAN_WBUS) & dMemIf_M.ready;
+  for (genvar i=0; i<4 ; i=i+1) begin
+    assign tary_clean_wen   [i] = (i == clean_cnt[8:7]) & (dch_state == CLEAN_WBUS) & dMemIf_M.ready;
     assign tary_clean_wdata [i] = {1'b0, cleanblk_valid, cleanblk_tag};  //{dirty,valid,tag};
-    assign dary_clean_ren   [i] = (i == clean_cnt[7]) & (dch_state_n == CLEAN_WBUS);
+    assign dary_clean_ren   [i] = (i == clean_cnt[8:7]) & (dch_state_n == CLEAN_WBUS);
   end
 
   // 5.4 update dMemIf_M signal: //////////////////////////////////////////////////////////////////////////////////////////
@@ -301,7 +318,7 @@ module dCache (
 
   // 6. all signals combination ://////////////////////////////////////////////////////////////////////////////////////////
 
-  for (genvar i=0; i<2 ; i=i+1) begin
+  for (genvar i=0; i<4 ; i=i+1) begin
     assign tary_wen    [i] = tary_miss_wen[i] | tary_hit_wen   [i] | tary_clean_wen[i];
     assign tary_addr   [i]=  i_clean ? cleanblk_index : index;
     assign tary_wdata  [i] = tary_miss_wen[i] ? tary_miss_wdata[i] : (tary_hit_wen [i] ? tary_hit_wdata[i] : tary_clean_wdata [i]);

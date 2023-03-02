@@ -146,7 +146,7 @@ module iCache (
     assign recent_wen[i] = (ich_state == HIT) & (index == i);
   end
 
-  assign recent_wdata = |hit[3:2] ? {1'b0, recent_wdata[1], 1'b0}:
+  assign recent_wdata =  |hit[3:2] ? {1'b0, recent_wdata[1], 1'b0}:
                         (|hit[1:0] ? {1'b1, 1'b1, recent_wdata[0]}
                         : recent_wdata);
 
