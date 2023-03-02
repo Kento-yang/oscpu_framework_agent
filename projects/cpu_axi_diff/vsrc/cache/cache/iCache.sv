@@ -8,38 +8,40 @@ module iCache (
 );
 
   //1. iCache : ////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-  //          |<------16 bytes---->|                |<------16 bytes---->|
-  //   ⌈‾‾‾‾‾⌉ ⌈‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾⌉         ⌈‾‾‾‾‾⌉ ⌈‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾⌉ ——
-  //   |    | |                    |        |     | |                   |  ↑
-  //   |    | |                    |        |     | |                   |  |
-  //   |    | |                    |        |     | |                   |  |
-  //   |    | |                    |        |     | |                   |  |
-  //   |Tag0| |    Cacheline0      |        |Tag1 | |    Cacheline1     |  |128 sets.
-  //   |    | |                    |        |     | |                   |  |
-  //   |    | |                    |        |     | |                   |  |
-  //   |    | |                    |        |     | |                   |  |
-  //   |    | |                    |        |     | |                   |  ↓
-  //   ⌊_____⌋ ⌊____________________⌋         ⌊_____⌋ ⌊____________________⌋ ——
-
+  //    128 sets. cacheline=16Bytes
+  // 
+  //          |<------16 bytes---->|                |<------16 bytes---->|             |<------16 bytes---->|           |<------16 bytes---->|               
+  //   ⌈‾‾‾‾‾⌉ ⌈‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾⌉        ⌈‾‾‾‾‾⌉ ⌈‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾⌉ ——    ⌈‾‾‾‾‾⌉ ⌈‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾⌉    ⌈‾‾‾‾‾⌉ ⌈‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾⌉ 
+  //   |    | |                    |       |     | |                   |  ↑    |     | |                   |   |     | |                   |  
+  //   |    | |                    |       |     | |                   |  |    |     | |                   |   |     | |                   |  
+  //   |    | |                    |       |     | |                   |  |    |     | |                   |   |     | |                   |  
+  //   |    | |                    |       |     | |                   |  |    |     | |                   |   |     | |                   |  
+  //   |Tag0| |    Cacheline0      |       |Tag1 | |    Cacheline1     |  |    |Tag2 | |    Cacheline2     |   |Tag3 | |    Cacheline3     |  
+  //   |    | |                    |       |     | |                   |  |    |     | |                   |   |     | |                   |  
+  //   |    | |                    |       |     | |                   |  |    |     | |                   |   |     | |                   |  
+  //   |    | |                    |       |     | |                   |  |    |     | |                   |   |     | |                   |  
+  //   |    | |                    |       |     | |                   |  ↓    |     | |                   |   |     | |                   |  
+  //   ⌊_____⌋ ⌊____________________⌋        ⌊_____⌋ ⌊____________________⌋ ——    ⌊_____⌋ ⌊____________________⌋    ⌊_____⌋ ⌊____________________⌋ 
+  
 
   // tag array signal:
-  logic                  tary_wen   [1:0];
-  logic [6:0]            tary_addr  [1:0];
-  logic [`iTARY_W-1:0]   tary_wdata [1:0];
-  logic [`iTARY_W-1:0]   tary_rdata [1:0];
+  logic                  tary_wen   [3:0];
+  logic [6:0]            tary_addr  [3:0];
+  logic [`iTARY_W-1:0]   tary_wdata [3:0];
+  logic [`iTARY_W-1:0]   tary_rdata [3:0];
 
   // data array signal:
-  logic                  dary_ren   [1:0];
-  logic                  dary_wen   [1:0];
-  logic [6:0]            dary_addr  [1:0];
-  logic [15:0]           dary_wstrb [1:0];
-  logic [127:0]          dary_wdata [1:0];
-  logic [127:0]          dary_rdata [1:0];
+  logic                  dary_ren   [3:0];
+  logic                  dary_wen   [3:0];
+  logic [6:0]            dary_addr  [3:0];
+  logic [15:0]           dary_wstrb [3:0];
+  logic [127:0]          dary_wdata [3:0];
+  logic [127:0]          dary_rdata [3:0];
 
-  for (genvar i=0; i<2 ; i=i+1) begin
+//4way
+  for (genvar i=0; i<4 ; i=i+1) begin
     iCache_tag_ary #(
-      .DATA_WIDTH (`iTARY_W)
+      .DATA_WIDTH (`iTARY_W) 
     ) u_tag_ary(
       .i_clk    (i_clk        ),
       .i_rst_n  (i_rst_n      ),
@@ -60,14 +62,15 @@ module iCache (
       .o_rdata (dary_rdata[i] )
     );
   end
-
-  logic [127:0] recent, recent_wen;
-  logic recent_wdata;
+  // age array
+  logic [127:0]  recent_wen;
+  logic [2:0]   recent [127:0] ;//00x 01x 1x0 1x1 == way0 1 2 3
+  logic [2:0]   recent_wdata;
 
   for (genvar i=0; i<128 ; i=i+1) begin
     stl_reg #(
-      .WIDTH      (1            ),
-      .RESET_VAL  (1'b0         )
+      .WIDTH      (3            ),//use plru， each cacheline need 3bit
+      .RESET_VAL  (3'b000         )
     ) reg_recent (
       .i_clk      (i_clk        ),
       .i_rst_n    (i_rst_n      ),
@@ -83,12 +86,23 @@ module iCache (
   wire [6:0]      index  = iCacheIf_S.addr[ 10:4];
   wire [3:0]      offset = iCacheIf_S.addr[  3:0];
 
-  wire [1:0] hit;
-  for (genvar i=0; i<2 ; i=i+1) begin
+  wire [3:0] hit;//4 way
+  for (genvar i=0; i<4 ; i=i+1) begin
     assign hit[i] = (tary_rdata[i][`TAG_BIT] == tag) & tary_rdata[i][`VLD_BIT];
   end
 
-  wire victim_blkid = ~recent[index];
+  wire [1:0] victim_blkid ;
+  //PLRU: 0 choose left tree,1 choose right tree
+  //          recent[2]:0
+  //       /              \       
+  //      /                \
+  //  recent[1]:0      recent[0]:0
+  //    /  \              /  \
+  // way0 way1           way2 way3
+
+  assign victim_blkid =  (recent[index][2] == 1'b0) ?
+                        ((recent[index][1] == 1'b0) ? 2'd0 : 2'd1) : 
+                        ((recent[index][0] == 1'b0) ? 2'd2 : 2'd3);
   
   // 3. state machine: /////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -132,13 +146,18 @@ module iCache (
     assign recent_wen[i] = (ich_state == HIT) & (index == i);
   end
 
-  assign recent_wdata = hit[1] ? 1'b1 : 1'b0;
+  assign recent_wdata = |hit[3:2] ? {1'b0, recent_wdata[1], 1'b0}:
+                        (|hit[1:0] ? {1'b1, 1'b1, recent_wdata[0]}
+                        : recent_wdata);
 
-  for (genvar i=0; i<2 ; i=i+1) begin
+  for (genvar i=0; i<4 ; i=i+1) begin
     assign dary_ren  [i] = (ich_state_n == HIT) & hit[i];
   end
 
-  wire [127:0] hit_cacheline = hit[1] ? dary_rdata[1] : (hit[0] ? dary_rdata[0] : 128'b0);
+  wire [127:0] hit_cacheline = hit[3]  ? dary_rdata[3] :
+                               hit[2]  ? dary_rdata[2] :
+                               hit[1]  ? dary_rdata[1] : 
+                               hit[0]  ? dary_rdata[0] : 128'b0;
 
   // 5. hit, iCacheIf_S signal: //////////////////////////////////////////////////////////////////////////////////////////////
   // input:  valid, addr, reqtyp(awlays `REQ_READ) , wdata(always 0), size(always 2'b10);
@@ -164,7 +183,7 @@ module iCache (
   assign iMemIf_M.size   =  2'b11;
 
   // 7. update tag_arry & data_array:///////////////////////////////////////////////////////////////////////////////////////
-  for (genvar i=0; i<2 ; i=i+1) begin
+  for (genvar i=0; i<4 ; i=i+1) begin
     assign tary_wen    [i] = iMemIf_M.valid & iMemIf_M.ready & (i == victim_blkid);
     assign tary_addr   [i] = index;
     assign tary_wdata  [i] = {1'b1,tag};
