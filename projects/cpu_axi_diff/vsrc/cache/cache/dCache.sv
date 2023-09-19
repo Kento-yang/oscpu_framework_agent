@@ -169,9 +169,11 @@ module dCache (
     assign recent_wen[i] = (dch_state == HIT) & (index == i);
   end
 
-  assign recent_wdata =  |hit[3:2] ? {1'b0, recent_wdata[1], 1'b0}:
-                        (|hit[1:0] ? {1'b1, 1'b1, recent_wdata[0]}
-                        : recent_wdata);//PLRU
+// NEXT PLRU 3BITS
+  assign recent_wdata[2:0] =  |hit[3:2] ? {~recent[index][2],  recent[index][1], ~recent[index][0]}:
+                             (|hit[1:0] ? {~recent[index][2], ~recent[index][1],  recent[index][0]}
+                            : recent[index]);
+
   // 3.2 read data array: ///////////////////////////////////////////////////////////////////////////////////////////////////
   for (genvar i=0; i<4 ; i=i+1) begin
     assign dary_hit_ren  [i] = (dch_state_n == HIT) & hit[i] & (dCacheIf_S.reqtyp == `REQ_READ);

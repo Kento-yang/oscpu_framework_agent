@@ -6,12 +6,12 @@ module ifu (
   uni_if.Master                   iCacheIf_M  ,
 
   // 2. signal to pipe shake hands:
-  input                           i_flush     ,
+  input                           i_flush     ,   //fence or ecxp/intr
   output                          o_post_valid,   //  to  post-stage
   input                           i_post_ready,   // from post-stage
 
-  // 3. input signal from pre stage:
-  input         [`CPU_WIDTH-1:0]  i_next_pc   ,
+  // 3. input signal from pre stage(bru give the next_pc):
+  input         [`CPU_WIDTH-1:0]  i_next_pc   , 
 
   // 4. output signal to post stage:
   output logic  [`CPU_WIDTH-1:0]  o_ifu_pc    ,
@@ -37,7 +37,7 @@ module ifu (
   );
 
   // 2. use interface to read ins ://////////////////////////////////////////
-
+  //                                            post_sh
   // ⌈‾‾‾‾⌉              ⌈‾‾‾‾⌉ ready --> | --> o_post_valid
   // |REG|              |UNIF|          | 
   // ⌊____⌋    --> valid ⌊____⌋           | <-- i_post_ready
@@ -49,9 +49,9 @@ module ifu (
   assign iCacheIf_M.reqtyp = `REQ_READ    ;
   assign iCacheIf_M.wdata  = `INS_WIDTH'b0; // no use.
   assign iCacheIf_M.addr   = next_pc_r[`ADR_WIDTH-1:0];
-  assign unif_rdata = iCacheIf_M.rdata[`INS_WIDTH-1:0];
+  assign unif_rdata = iCacheIf_M.rdata[`INS_WIDTH-1:0];//32 bit
 
-  // 3. use one register to save data/valid for post stage :///////////////////
+  // 3. use one register to save ICache data/valid for post stage :///////////////////
 
   wire UniIf_Sh = iCacheIf_M.valid & iCacheIf_M.ready;
 
@@ -79,8 +79,8 @@ module ifu (
 
   // 4. use pre stage signals to generate comb logic for post stage://////////////////////////////////////////
 
-  assign o_post_valid = UniIf_Sh | wait_post_ready; 
+  assign o_post_valid = UniIf_Sh | wait_post_ready; //bypass, icache shakehand to next stage
   assign o_ifu_pc     = next_pc_r;
-  assign o_ifu_ins    = UniIf_Sh ? unif_rdata : unif_rdata_r;
+  assign o_ifu_ins    = UniIf_Sh ? unif_rdata : unif_rdata_r; //bypass, icache data to next stage
 
 endmodule

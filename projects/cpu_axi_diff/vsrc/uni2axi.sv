@@ -96,11 +96,11 @@ module uni2axi # (
 
   wire [AXI_STRB_WIDTH-1:0] dev_strb = (({AXI_STRB_WIDTH{size_b}} & {8'b0000_0001})
                                       | ({AXI_STRB_WIDTH{size_h}} & {8'b0000_0011})
-                                      | ({AXI_STRB_WIDTH{size_w}} & {8'b0000_1111})) << offset;
+                                      | ({AXI_STRB_WIDTH{size_w}} & {8'b0000_1111})) << offset; //use strobe signal align addr.
 
-  assign                    axi_len  = UniIf_S.cachable ? (TRANS_LEN - 1) : 0;
+  assign                    axi_len  = UniIf_S.cachable ? (TRANS_LEN - 1) : 0; //cacheable:1, non-cacheable:0
   wire [2:0]                axi_size = {1'b0,UniIf_S.size};
-  wire [AXI_ADDR_WIDTH-1:0] axi_addr = {{(AXI_ADDR_WIDTH-UNI_ADDR_WIDTH){1'b0}},UniIf_S.addr[UNI_ADDR_WIDTH-1:2], is_uart ? UniIf_S.addr[1:0]: 2'b00};
+  wire [AXI_ADDR_WIDTH-1:0] axi_addr = {{(AXI_ADDR_WIDTH-UNI_ADDR_WIDTH){1'b0}},UniIf_S.addr[UNI_ADDR_WIDTH-1:2], is_uart ? UniIf_S.addr[1:0]: 2'b00};//uart addr send unalign addr
 
   wire [AXI_ID_WIDTH-1:0]   axi_id   = {AXI_ID_WIDTH{1'b0}};
   wire [AXI_USER_WIDTH-1:0] axi_user = {AXI_USER_WIDTH{1'b0}};
@@ -121,11 +121,11 @@ module uni2axi # (
   assign AxiIf_M.aw_addr    = axi_addr;
   assign AxiIf_M.aw_len     = axi_len;
   assign AxiIf_M.aw_size    = axi_size;
-  assign AxiIf_M.aw_burst   = `AXI_BURST_TYPE_INCR;
+  assign AxiIf_M.aw_burst   = `AXI_BURST_TYPE_INCR;//2'b01 INCR模式
   assign AxiIf_M.aw_id      = axi_id;                                                                           // no use.
   assign AxiIf_M.aw_user    = axi_user;                                                                         // no use.
   assign AxiIf_M.aw_prot    = `AXI_PROT_UNPRIVILEGED_ACCESS | `AXI_PROT_SECURE_ACCESS | `AXI_PROT_DATA_ACCESS;  // no use.
-  assign AxiIf_M.aw_cache   = `AXI_AWCACHE_WRITE_BACK_READ_AND_WRITE_ALLOCATE;                                  // no use.
+  assign AxiIf_M.aw_cache   = `AXI_AWCACHE_WRITE_BACK_READ_AND_WRITE_ALLOCATE;                                  // no use. 1111
   assign AxiIf_M.aw_lock    = 1'b0;                                                                             // no use.
   assign AxiIf_M.aw_qos     = 4'h0;                                                                             // no use.
   assign AxiIf_M.aw_region  = 4'h0;                                                                             // no use.

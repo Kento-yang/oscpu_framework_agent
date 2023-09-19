@@ -17,7 +17,7 @@ module bru (
   input                         i_iru_jump    ,
   input     [`CPU_WIDTH-1:0]    i_iru_pc      ,
   input                         i_fence_jump  ,
-  input     [`CPU_WIDTH-1:0]    i_fence_pc    ,
+  input     [`CPU_WIDTH-1:0]    i_fence_pc    , //if fence ,fence_pc = lsu_pc+4
   output    [`CPU_WIDTH-1:0]    o_next_pc     ,
   output                        o_ifid_nop
 );

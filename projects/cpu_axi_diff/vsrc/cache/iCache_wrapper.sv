@@ -33,10 +33,10 @@ module iCache_wrapper (
   uni_if #(.ADDR_W(`ADR_WIDTH), .DATA_W(128)) iCachableMemIf();
 
   assign iCachableCacheIf.valid    = iCacheIf_S.valid & cachable;
-  assign iCachableCacheIf.reqtyp   = iCacheIf_S.reqtyp   ;
+  assign iCachableCacheIf.reqtyp   = iCacheIf_S.reqtyp   ;//read
   assign iCachableCacheIf.addr     = iCacheIf_S.addr     ;
-  assign iCachableCacheIf.wdata    = iCacheIf_S.wdata    ;
-  assign iCachableCacheIf.size     = iCacheIf_S.size     ;
+  assign iCachableCacheIf.wdata    = iCacheIf_S.wdata    ;//no use.
+  assign iCachableCacheIf.size     = iCacheIf_S.size     ;//2'b10, 32bit
 
   assign iCachableMemIf.ready      = iMemIf_M.ready & cachable;
   assign iCachableMemIf.rdata      = iMemIf_M.rdata;

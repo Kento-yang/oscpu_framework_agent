@@ -6,11 +6,11 @@
 
 // 2. for cache:////////////////////////////////////////////////////////////////////////////////////////////
 
-`define TAG_W          `ADR_WIDTH-11
+`define TAG_W          `ADR_WIDTH-11  //21bits
 `define VLD_W           1
 `define DRT_W           1
 `define dTARY_W         `TAG_W+`VLD_W+`DRT_W // tag + valid + dirty.
-`define iTARY_W         `TAG_W+`VLD_W
+`define iTARY_W         `TAG_W+`VLD_W //22bits
 
 `define TAG_BIT        `TAG_W-1:0
 `define VLD_BIT        `TAG_W

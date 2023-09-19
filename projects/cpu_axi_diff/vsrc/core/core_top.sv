@@ -103,7 +103,7 @@ module core_top(
     .i_rst_n        (i_rst_n      ),
     .i_flush        (idu_flush    ),
     .i_pre_nop      (ifid_nop     ),
-    .i_pre_stall    (ifid_stall   ),
+    .i_pre_stall    (ifid_stall   ),//from ld-add data adventure
     .i_pre_valid    (ifu_valid    ),
     .o_pre_ready    (ifu_ready    ),
     .o_post_valid   (idu_valid    ),

@@ -67,6 +67,7 @@ module iCache (
   logic [2:0]   recent [127:0] ;//00x 01x 1x0 1x1 == way0 1 2 3
   logic [2:0]   recent_wdata;
 
+  
   for (genvar i=0; i<128 ; i=i+1) begin
     stl_reg #(
       .WIDTH      (3            ),//use plru， each cacheline need 3bit
@@ -92,7 +93,7 @@ module iCache (
   end
 
   wire [1:0] victim_blkid ;
-  //PLRU: 0 choose left tree,1 choose right tree
+  //PLRU: 0 choose left tree,  1 choose right tree
   //          recent[2]:0
   //       /              \       
   //      /                \
@@ -143,13 +144,13 @@ module iCache (
   // 4. hit, read data array, update recent: /////////////////////////////////////////////////////////////////////////////////
 
   for (genvar i=0; i<128; i=i+1 ) begin
-    assign recent_wen[i] = (ich_state == HIT) & (index == i);
+    assign recent_wen[i] = (ich_state_n == HIT) & (index == i);
   end
 
-  assign recent_wdata =  |hit[3:2] ? {1'b0, recent_wdata[1], 1'b0}:
-                        (|hit[1:0] ? {1'b1, 1'b1, recent_wdata[0]}
-                        : recent_wdata);
-
+// NEXT PLRU 3BITS
+  assign recent_wdata[2:0] =  |hit[3:2] ? {~recent[index][2],  recent[index][1], ~recent[index][0]}:
+                             (|hit[1:0] ? {~recent[index][2], ~recent[index][1],  recent[index][0]}
+                            : recent[index]);
   for (genvar i=0; i<4 ; i=i+1) begin
     assign dary_ren  [i] = (ich_state_n == HIT) & hit[i];
   end

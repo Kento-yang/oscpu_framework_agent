@@ -4,7 +4,7 @@ module idu (
   input  logic                      i_rst_n       ,
   input  logic                      i_flush       ,
   input  logic                      i_pre_nop     ,
-  input  logic                      i_pre_stall   ,
+  input  logic                      i_pre_stall   ,   // from data adventure
   input  logic                      i_pre_valid   ,   // from pre-stage
   output logic                      o_pre_ready   ,   //  to  pre-stage
   output logic                      o_post_valid  ,   //  to  post-stage
