@@ -31,3 +31,6 @@
 **/build_test/
 **/difftest
 **/out/
+
+# RVA-01 agent task package: allow its markdown/yaml/json files too
+!rv_agent_cpu_plan/**

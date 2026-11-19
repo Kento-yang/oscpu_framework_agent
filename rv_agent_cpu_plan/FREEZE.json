@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "task_id": "RVA-01",
+  "status": "draft",
+  "publication_date": "2026-11-18",
+  "scope": "task-level plan; not a suite-wide release",
+  "baseline_authority": "projects/cpu_axi_diff/vsrc",
+  "reference_design": {
+    "repository": "Kento-yang/oscpu_dyw",
+    "repository_commit": "bb69f7466df39ebe1909a3a111c13323caeda203",
+    "path": "projects/cpu_axi_diff/vsrc",
+    "top_module": "SimTop",
+    "top_wrapper_chain": [
+      "SimTop.sv",
+      "top.sv"
+    ],
+    "verified_environment": {
+      "framework": "oscpu-dyw",
+      "verilator": "4.204",
+      "nemu": "e402575a (riscv64-ysyx-ref_defconfig)",
+      "difftest": "56d947bb",
+      "dramsim3": "5723f6b1 (WITH_DRAMSIM3=1)",
+      "ysyxsoc": "53540d03"
+    },
+    "verified_result": {
+      "cpu_tests": "33/33",
+      "riscv_tests": "50/50",
+      "custom_output": "4/4",
+      "total": "87/87",
+      "optional_cpu_tests_fencei": "36/36",
+      "optional_cpu_tests_ysyx4": "35/35"
+    },
+    "public_skeleton": "public/cpu_axi_diff"
+  },
+  "contracts": {
+    "task_metadata": {
+      "id": "RVA-01",
+      "title": "rv64im_cache_axi_five_stage_cpu",
+      "status": "draft",
+      "spec_revision": "oscpu_axi_v1",
+      "judge_revision": "rva01_87tests_v1",
+      "scoring_policy": "rva01_plan_v1",
+      "functional_max": 50,
+      "ppa_status": "not_run",
+      "level_hypothesis": 8,
+      "origin": "Kento-yang/oscpu_dyw/projects/cpu_axi_diff",
+      "time_limit_minutes": 120,
+      "f_points": [
+        30,
+        15,
+        5
+      ],
+      "p_points": [
+        20,
+        15,
+        15
+      ],
+      "time_points": 5,
+      "reference_functional_result": {
+        "cpu_tests": "33/33",
+        "riscv_tests": "50/50",
+        "custom_output": "4/4",
+        "total": "87/87"
+      }
+    },
+    "hardware_limit": {
+      "vcpu": 16,
+      "ram_gib": 15,
+      "disk_gib": 947,
+      "gpu": false
+    },
+    "score_items": [
+      {
+        "id": "F_RV64I",
+        "layer": "F",
+        "points": 30,
+        "groups": [
+          "CPU-RV64I"
+        ],
+        "automated": true
+      },
+      {
+        "id": "F_CPUTEST",
+        "layer": "F",
+        "points": 15,
+        "groups": [
+          "CPU-CPUTEST"
+        ],
+        "automated": true
+      },
+      {
+        "id": "F_DIFF",
+        "layer": "F",
+        "points": 5,
+        "groups": [
+          "CPU-DIFF"
+        ],
+        "automated": true
+      },
+      {
+        "id": "P_PIPE",
+        "layer": "P",
+        "points": 20,
+        "groups": [
+          "CPU-PIPE-STRUCT",
+          "CPU-PIPE-HAZ",
+          "CPU-PIPE-FLUSH"
+        ],
+        "automated": false
+      },
+      {
+        "id": "P_CACHE",
+        "layer": "P",
+        "points": 15,
+        "groups": [
+          "CPU-CACHE-I",
+          "CPU-CACHE-D"
+        ],
+        "automated": false
+      },
+      {
+        "id": "P_BUS",
+        "layer": "P",
+        "points": 15,
+        "groups": [
+          "CPU-BUS-RESP",
+          "CPU-BUS-BP",
+          "CPU-RESET"
+        ],
+        "automated": false
+      }
+    ],
+    "test_suites": {
+      "bin/non-output/cpu-tests": 33,
+      "bin/non-output/riscv-tests": 50,
+      "bin/custom-output/yield-test": 1,
+      "bin/custom-output/time-test": 1,
+      "bin/custom-output/interrupt-test": 1,
+      "bin/custom-output/rt-thread": 1
+    },
+    "pass_criterion": "83 basic cases: HIT GOOD TRAP; 4 custom-output cases: expected output within -C cycle limit; no difftest mismatch; no timeout",
+    "optional_suites": {
+      "bin/non-output/cpu-tests-fencei": 36,
+      "bin/non-output/cpu-tests-ysyx4": 35
+    }
+  },
+  "artifact_sha256": {
+    "README.md": "73d171381b92b881b11bc66a1d39d3e07a08355b015aab7af8cb194636123305",
+    "task.md": "43f46033cb8b4905c6f5d512cf5bb2803fd94e9e76ac8c76bf01a82395efba9c",
+    "acceptance.md": "1e0246b1e25ccc8ea51af7773950b78a0b7fd01a4a81172ddcaa0a0168970955",
+    "task.yaml": "3cf83fc8075ac16a0fba3cc6c55adb9f892b6413bc0ce0409f515cc37ed06507",
+    "public/tb.sv": "a93d83e9830c443b8263dcce31caf9e8d05bc4101763bbd6e8d9d6b9faa0b0ba",
+    "public/tb_cpu_elf.sv": "ee74351baf37faa07d2910e4014175609217fd9e5822a9f720110d6af2438e50",
+    "public/axi_mem_model.sv": "acbb580cbd424db2e22d3e18eef12be5cad7f3b4087d11b9b0c6cc8820622456",
+    "public/difftest_stub.sv": "8934200d77fc297488dd71616ff0d22d10d9524e9dfc11453afebecfba678fc8",
+    "public/tb_smoke_main.cpp": "65686ca01b33a622bafa39c73f1304e80b1fe4fffd212763dcf7470e60f6bdf9",
+    "public/tb_elf_main.cpp": "730f6fb51941bef73d01da67b3e141d6427b7196ca8223ceb2f9b365b1a354e8",
+    "public/cpu_axi_diff/README.md": "41d80eb91a31054c57c4155fa5df4b6f58331b30e7ef57db210efacf7e5912ae"
+  },
+  "caveats": [
+    "F group now requires 87/87 (83 basic + 4 custom-output); optional fencei/ysyx4 suites are not part of the 87-case gate.",
+    "P groups, ACT4, Sail and PPA are planned or out of scope.",
+    "Public testbenches re-validated on 2026-11-18 with projects/cpu_axi_diff (smoke 64 commits/214 cycles; ELF add/dummy/load-store/matrix-mul/quick-sort with AXI delay and backpressure).",
+    "The reference design implements fence.i; plain fence, illegal-instruction, EBREAK and misaligned wide-access traps are not implemented (unknown/EBREAK decode as NOP).",
+    "The reference RTL does not explicitly clear JALR target bit0; the 87 cases do not cover odd targets. The task requirement still asks for ISA-compliant clearing.",
+    "Passing the 87 cases is not RISC-V certification."
+  ]
+}

@@ -1,0 +1,34 @@
+id: RVA-01
+title: rv64im_cache_axi_five_stage_cpu
+status: draft
+spec_revision: oscpu_axi_v1
+judge_revision: rva01_87tests_v1
+scoring_policy: rva01_plan_v1
+functional_max: 50
+ppa_status: not_run
+ppa_clock_period_ps: null
+ppa_timing_corner: null
+level_hypothesis: 8
+origin: Kento-yang/oscpu_dyw/projects/cpu_axi_diff
+time_limit_minutes: 120
+reference_repo_commit: bb69f7466df39ebe1909a3a111c13323caeda203
+reference_upstream_branch: null
+reference_upstream_commit: null
+reference_top_module: SimTop
+reference_functional_result:
+  cpu_tests: 33/33
+  riscv_tests: 50/50
+  custom_output: 4/4
+  total: 87/87
+optional_regression:
+  cpu_tests_fencei: 36/36
+  cpu_tests_ysyx4: 35/35
+f_points:
+- 30
+- 15
+- 5
+p_points:
+- 20
+- 15
+- 15
+time_points: 5
