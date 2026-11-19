@@ -1,0 +1,172 @@
+# =============================================================================
+# oscpu-dyw / RVA-01 environment manifest
+# =============================================================================
+# This is a human-readable environment manifest, not a pip requirements file.
+# There are no Python packages required by the RTL build or the difftest flow.
+#
+# Tested environment:
+#   Ubuntu 22.04 on WSL2, Linux 5.15.146.1
+#   16 cores, ~15 GiB RAM, ~947 GiB free disk
+#   Verilator 4.204, g++ 11.4.0, cmake 3.22.6, GNU Make 4.3, Python 3.10.12
+#
+# Verified results in this environment:
+#   87/87 = bin/non-output/cpu-tests (33) + bin/non-output/riscv-tests (50)
+#           + bin/custom-output (yield/time/interrupt/rt-thread, 4)
+#   Optional: cpu-tests-fencei 36/36, cpu-tests-ysyx4 35/35
+#
+# Reference design: projects/cpu_axi_diff (commit bb69f74)
+# Dependency commits: NEMU e402575a, difftest 56d947bb,
+#                     DRAMsim3 5723f6b1, ysyxSoC 53540d03
+# =============================================================================
+
+
+# =============================================================================
+# 1. Host tools (required)
+# =============================================================================
+# Name                    Tested version     Used by
+# -----------------------------------------------------------------------------
+# g++ / gcc               11.4.0             NEMU, difftest emu, Verilator
+# GNU make                4.3                all C/C++ builds
+# cmake                   3.22.6             DRAMsim3 (>= 3.13 is enough)
+# python3                 3.10.12            build scripts only
+# git                     2.34.1             fetching dependencies
+# GNU time                /usr/bin/time      difftest Makefile (`time -a -o`)
+# bison                   3.8.2              NEMU kconfig parser
+# flex                    2.6.4              NEMU kconfig parser
+# ccache                  optional           speeds up emu rebuilds
+# gtkwave                 optional           waveform viewing
+# verilator               4.204 (required)   RTL simulation; see section 2
+#
+# Ubuntu 22.04, with root:
+#   sudo apt-get update
+#   sudo apt-get install -y \
+#     build-essential cmake git python3 bison flex pkg-config time ccache \
+#     libreadline-dev libtinfo-dev zlib1g-dev libsdl2-dev libsqlite3-dev \
+#     gtkwave
+#
+# To build Verilator 4.204 from source you additionally need:
+#   autoconf libfl-dev help2man
+
+
+# =============================================================================
+# 2. Verilator 4.204 (required)
+# =============================================================================
+# `verilator --version` must report:
+#   Verilator 4.204 2021-06-12 rev v4.204
+#
+# Build from source:
+#   git clone https://github.com/verilator/verilator.git
+#   cd verilator
+#   git checkout v4.204
+#   autoconf
+#   ./configure --prefix="$HOME/tools/verilator-4.204"
+#   make -j"$(nproc)"
+#   make install
+#   export PATH="$HOME/tools/verilator-4.204/bin:$PATH"
+#
+# Do not rely on Ubuntu 22.04's default Verilator (4.038): this project was
+# tested with 4.204 and the build scripts assume its command-line behavior.
+
+
+# =============================================================================
+# 3. Git dependencies (exact commits)
+# =============================================================================
+# The repository's libraries/ directory is empty and there is no .gitmodules,
+# so clone these manually at the recorded commits:
+#
+#   git clone https://github.com/Kento-yang/oscpu_dyw.git ~/oscpu-dyw
+#   cd ~/oscpu-dyw
+#
+#   git clone https://gitee.com/oscpu/NEMU.git libraries/NEMU
+#   git -C libraries/NEMU checkout e402575a33b6bb910a40f5114e53b1dd55b72da2
+#
+#   git clone https://github.com/OpenXiangShan/difftest.git libraries/difftest
+#   git -C libraries/difftest checkout 56d947bbfd420a0ee3f5794ad2ac4b1525892540
+#
+#   git clone https://github.com/OpenXiangShan/DRAMsim3.git libraries/DRAMsim3
+#   git -C libraries/DRAMsim3 checkout 5723f6b1cc157ac2d7b4154b50fd1799c9cf54aa
+#
+#   git clone https://github.com/OSCPU/ysyxSoC.git libraries/ysyxSoC
+#   git -C libraries/ysyxSoC checkout 53540d038ed567fcf5e10d3fb3c4069922735ead
+#
+# NEMU commit e402575a is no longer on the GitHub upstream; the gitee
+# oscpu/NEMU repository does contain it.
+#
+# The test images under bin/ (cpu-tests, riscv-tests, custom-output) are
+# already included in this repository; no extra download is needed.
+
+
+# =============================================================================
+# 4. No-root alternative for the C/C++ development files
+# =============================================================================
+# If you cannot install the -dev packages above (no sudo), extract them into a
+# persistent directory. Do not use /tmp: it is cleared on reboot and the build
+# will then fail with errors such as:
+#   fatal error: SDL2/_real_SDL_config.h: No such file or directory
+#   fatal error: zlib.h: No such file or directory
+#
+#   mkdir -p /tmp/debs "$HOME/tools/oscpu-dev-deps"
+#   cd /tmp/debs
+#   apt-get download libreadline-dev libtinfo-dev zlib1g-dev \
+#     libsqlite3-dev libsdl2-dev
+#   for f in *.deb; do dpkg-deb -x "$f" "$HOME/tools/oscpu-dev-deps"; done
+#
+# This self-contained tree supplies all headers, static libraries and the
+# sdl2-config helper; no extra prefix (such as ~/tools/nemu-deps) is required.
+
+
+# =============================================================================
+# 5. Environment variables
+# =============================================================================
+# After the dependencies are in place, set (see README.md "使用流程"):
+#
+#   cd ~/oscpu-dyw
+#   export NEMU_HOME="$PWD/libraries/NEMU"
+#   export PATH="$HOME/tools/oscpu-dev-deps/usr/bin:$PATH"
+#   export CPATH="$HOME/tools/oscpu-dev-deps/usr/include/x86_64-linux-gnu:$HOME/tools/oscpu-dev-deps/usr/include"
+#   export LIBRARY_PATH="$HOME/tools/oscpu-dev-deps/usr/lib/x86_64-linux-gnu"
+#
+# When using system-installed -dev packages, the CPATH/LIBRARY_PATH lines can
+# be omitted. NEMU_HOME is still required at emu runtime.
+#
+# The build scripts set NOOP_HOME and DRAMSIM3_HOME themselves; do not override
+# them unless you know what you are doing.
+
+
+# =============================================================================
+# 6. Python packages
+# =============================================================================
+# None. There is no pip install step for the RTL/difftest flow.
+# Python 3 is only used indirectly by helper scripts and is part of the base OS.
+
+
+# =============================================================================
+# 7. Compute / storage
+# =============================================================================
+# Tested on: 16 cores, ~15 GiB RAM, ~947 GiB free disk.
+# Recommended: >= 8 cores, >= 12 GiB RAM, >= 5 GiB free disk.
+# A full emu build plus the three C++ dependencies fits comfortably in a few
+# GiB; the bulk of the disk usage comes from the toolchains and git history.
+# More cores/RAM mainly reduce the Verilator C++ compile time.
+
+
+# =============================================================================
+# 8. Quick verification
+# =============================================================================
+# Follow README.md "使用流程". The short version:
+#
+#   cd ~/oscpu-dyw
+#   mkdir -p projects/cpu_axi_diff/build
+#   cp projects/cpu_axi_diff/vsrc/SimTop.sv projects/cpu_axi_diff/build/SimTop.v
+#   ./build.sh -e cpu_axi_diff -d -b -m "EMU_TRACE=1 WITH_DRAMSIM3=1"
+#
+#   cd projects/cpu_axi_diff/build
+#   NEMU_HOME=$HOME/oscpu-dyw/libraries/NEMU \
+#     ./emu -i ../../../bin/non-output/riscv-tests/add-riscv-tests.bin
+#
+# Expected final line:
+#   instrCnt = 450, cycleCnt = 6761, IPC = 0.066558
+#   (and "HIT GOOD TRAP" above it)
+#
+# The full 87-case regression, custom-output cycle-limit commands, and IPC
+# baselines are documented in rv_agent_cpu_plan/README.md.

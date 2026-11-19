@@ -16,8 +16,8 @@
 //     rv_agent_cpu_plan/public/tb_smoke_main.cpp \
 //     $(find projects/<name>/vsrc \( -name '*.sv' -o -name '*.v' \) ! -name 'SimTop.v')
 //
-// Validated with projects/cpu_axi_diff_cache on 2026-11-17:
-//   PUBLIC_PASS commits=64 cycles=248 read_beats=32 write_beats=0
+// Validated with projects/cpu_axi_diff on 2026-11-18:
+//   PUBLIC_PASS commits=64 cycles=214 read_beats=33 write_beats=0
 
 `timescale 1ns/1ps
 

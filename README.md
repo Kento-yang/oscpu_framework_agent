@@ -24,6 +24,8 @@ wget https://gitee.com/oscpu/oscpu-env-setup/raw/master/oscpu-env-setup.sh && ch
 wget https://gitee.com/oscpu/oscpu-env-setup/raw/master/oscpu-env-setup.sh && chmod +x oscpu-env-setup.sh && ./oscpu-env-setup.sh -g -c && rm oscpu-env-setup.sh
 ```
 
+本仓库实际验证所用的完整依赖、版本与无 root 安装方式见根目录 [`requirements.txt`](./requirements.txt)。
+
 # 获取代码
 
 ```shell

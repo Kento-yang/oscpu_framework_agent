@@ -21,9 +21,9 @@
 //     rv_agent_cpu_plan/public/tb_elf_main.cpp \
 //     $(find projects/<name>/vsrc \( -name '*.sv' -o -name '*.v' \) ! -name 'SimTop.v')
 //
-// Validated with projects/cpu_axi_diff_cache on 2026-11-17:
+// Validated with projects/cpu_axi_diff on 2026-11-18:
 //   add-riscv-tests, dummy/load-store/matrix-mul/quick-sort cpu-tests pass,
-//   including +RESP_DELAY=8 and +BACKPRESSURE=1.
+//   including +RESP_DELAY=8 and +BACKPRESSURE=1 (matrix-mul: 78 write beats).
 
 `timescale 1ns/1ps
 

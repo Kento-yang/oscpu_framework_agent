@@ -4,7 +4,7 @@
 // The model accepts one read and one write transaction at a time and
 // supports INCR bursts with 64-bit beats (size=3 is what the reference
 // cache uses).  AW must be accepted before W beats are accepted; this is
-// legal AXI backpressure and matches the reference axi_rw behaviour.
+// legal AXI backpressure and matches the reference uni2axi/cache behaviour.
 //
 // Plusargs:
 //   +IMAGE=<path>       raw binary loaded at BASE (when INIT_ADDI64=0)
