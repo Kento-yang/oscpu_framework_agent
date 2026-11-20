@@ -1,51 +1,54 @@
 # =============================================================================
 # oscpu-dyw / RVA-01 environment manifest
 # =============================================================================
-# This is a human-readable environment manifest, not a pip requirements file.
-# There are no Python packages required by the RTL build or the difftest flow.
+# This is a human-readable manifest, NOT a pip requirements file.
+# It lists required tools/components and version constraints only.
+# Install commands are intentionally omitted: package names differ between
+# distributions (Ubuntu/Debian *-dev vs CentOS/RHEL *-devel).
 #
-# Tested environment:
-#   Ubuntu 22.04 on WSL2, Linux 5.15.146.1
-#   16 cores, ~15 GiB RAM, ~947 GiB free disk
-#   Verilator 4.204, g++ 11.4.0, cmake 3.22.6, GNU Make 4.3, Python 3.10.12
+# Verified environment:
+#   Ubuntu 22.04 (WSL2), GCC 11.4.0, Verilator 4.204, CMake 3.22.6,
+#   GNU Make 4.3, Python 3.10.12, 16 cores / ~15 GiB RAM / ~947 GiB free.
+# Another relevant environment:
+#   CentOS 7.9 userland EDA container (see section 4).
 #
-# Verified results in this environment:
-#   87/87 = bin/non-output/cpu-tests (33) + bin/non-output/riscv-tests (50)
-#           + bin/custom-output (yield/time/interrupt/rt-thread, 4)
+# Verified results:
+#   87/87 = cpu-tests (33) + riscv-tests (50) + custom-output (4)
 #   Optional: cpu-tests-fencei 36/36, cpu-tests-ysyx4 35/35
 #
 # Reference design: projects/cpu_axi_diff (commit bb69f74)
-# Dependency commits: NEMU e402575a, difftest 56d947bb,
-#                     DRAMsim3 5723f6b1, ysyxSoC 53540d03
+# Fixed dependency commits: NEMU e402575a, difftest 56d947bb,
+#                           DRAMsim3 5723f6b1, ysyxSoC 53540d03
 # =============================================================================
 
 
 # =============================================================================
-# 1. Host tools (required)
+# 1. Required tools and components
 # =============================================================================
-# Name                    Tested version     Used by
+# Component            Version / constraint                 Purpose
 # -----------------------------------------------------------------------------
-# g++ / gcc               11.4.0             NEMU, difftest emu, Verilator
-# GNU make                4.3                all C/C++ builds
-# cmake                   3.22.6             DRAMsim3 (>= 3.13 is enough)
-# python3                 3.10.12            build scripts only
-# git                     2.34.1             fetching dependencies
-# GNU time                /usr/bin/time      difftest Makefile (`time -a -o`)
-# bison                   3.8.2              NEMU kconfig parser
-# flex                    2.6.4              NEMU kconfig parser
-# ccache                  optional           speeds up emu rebuilds
-# gtkwave                 optional           waveform viewing
-# verilator               4.204 (required)   RTL simulation; see section 2
+# Verilator            4.204 (exact)                        RTL simulation
+# C++ compiler         C++14-capable GCC/G++ (>= 8;         NEMU, difftest, Verilator
+#                      tested 11.4.0)
+# GNU Make             recent                               all builds
+# CMake                >= 3.13 (tested 3.22.6)             DRAMsim3
+# Python 3             recent (tested 3.10 / 3.12)          helper scripts
+# Git                  recent                               fixed dependencies
+# Bison / Flex         recent enough for Verilator 4.204    kconfig / Verilator
+# GNU time             /usr/bin/time supporting -a -o       difftest Makefile
+# readline             development headers + library        NEMU
+# ncurses / tinfo      development headers + library        readline dependency
+# zlib                 development headers + library        difftest emu
+# SDL2 + sdl2-config   development headers + library + tool difftest emu
+# SQLite3              development headers + library        difftest emu
 #
-# Ubuntu 22.04, with root:
-#   sudo apt-get update
-#   sudo apt-get install -y \
-#     build-essential cmake git python3 bison flex pkg-config time ccache \
-#     libreadline-dev libtinfo-dev zlib1g-dev libsdl2-dev libsqlite3-dev \
-#     gtkwave
-#
-# To build Verilator 4.204 from source you additionally need:
-#   autoconf libfl-dev help2man
+# Optional:
+#   pkg-config        convenience for library discovery
+#   ccache            faster rebuilds
+#   gtkwave           waveform viewing
+#   Yosys             PPA fallback (`stat` for state bits)
+#   autoconf          only when building Verilator from source
+#   help2man, libfl   only when building Verilator from source
 
 
 # =============================================================================
@@ -54,119 +57,103 @@
 # `verilator --version` must report:
 #   Verilator 4.204 2021-06-12 rev v4.204
 #
-# Build from source:
-#   git clone https://github.com/verilator/verilator.git
-#   cd verilator
-#   git checkout v4.204
-#   autoconf
-#   ./configure --prefix="$HOME/tools/verilator-4.204"
-#   make -j"$(nproc)"
-#   make install
-#   export PATH="$HOME/tools/verilator-4.204/bin:$PATH"
-#
-# Do not rely on Ubuntu 22.04's default Verilator (4.038): this project was
-# tested with 4.204 and the build scripts assume its command-line behavior.
+# Ubuntu 22.04's default 4.038 and CentOS 7's base version are NOT sufficient.
+# Provide 4.204 through the container image, a prebuilt package, or a source
+# build. Source-build prerequisites: C++14 compiler, GNU Make, autoconf,
+# flex, bison; help2man and libfl are optional.
+# No install commands are listed here on purpose.
 
 
 # =============================================================================
-# 3. Git dependencies (exact commits)
+# 3. C/C++ development components
 # =============================================================================
-# The repository's libraries/ directory is empty and there is no .gitmodules,
-# so clone these manually at the recorded commits:
+# Required components: readline, ncurses/tinfo, zlib, SDL2 (+ sdl2-config),
+# SQLite3. Package naming differs by distribution:
+#   - Ubuntu/Debian: usually *-dev (readline, zlib, SDL2, SQLite3 variants)
+#   - CentOS/RHEL: usually *-devel (readline-devel, zlib-devel, SDL2-devel)
+# Use the distro package manager or a preinstalled prefix.
 #
-#   git clone https://github.com/Kento-yang/oscpu_dyw.git ~/oscpu-dyw
-#   cd ~/oscpu-dyw
-#
-#   git clone https://gitee.com/oscpu/NEMU.git libraries/NEMU
-#   git -C libraries/NEMU checkout e402575a33b6bb910a40f5114e53b1dd55b72da2
-#
-#   git clone https://github.com/OpenXiangShan/difftest.git libraries/difftest
-#   git -C libraries/difftest checkout 56d947bbfd420a0ee3f5794ad2ac4b1525892540
-#
-#   git clone https://github.com/OpenXiangShan/DRAMsim3.git libraries/DRAMsim3
-#   git -C libraries/DRAMsim3 checkout 5723f6b1cc157ac2d7b4154b50fd1799c9cf54aa
-#
-#   git clone https://github.com/OSCPU/ysyxSoC.git libraries/ysyxSoC
-#   git -C libraries/ysyxSoC checkout 53540d038ed567fcf5e10d3fb3c4069922735ead
-#
-# NEMU commit e402575a is no longer on the GitHub upstream; the gitee
-# oscpu/NEMU repository does contain it.
-#
-# The test images under bin/ (cpu-tests, riscv-tests, custom-output) are
-# already included in this repository; no extra download is needed.
+# No-root / no package installation:
+#   Put the development headers and libraries in a persistent local prefix
+#   (do NOT use /tmp; it is cleared on reboot), then set:
+#     PATH         -> prefix/bin        (for sdl2-config)
+#     CPATH        -> prefix/include    (headers)
+#     LIBRARY_PATH -> prefix/lib        (libraries)
+#   The prefix path/name is arbitrary; the build does not depend on a specific
+#   location. A self-contained prefix needs readline, ncurses/tinfo, zlib,
+#   SDL2 and SQLite3 development files.
 
 
 # =============================================================================
-# 4. No-root alternative for the C/C++ development files
+# 4. OS differences
 # =============================================================================
-# If you cannot install the -dev packages above (no sudo), extract them into a
-# persistent directory. Do not use /tmp: it is cleared on reboot and the build
-# will then fail with errors such as:
-#   fatal error: SDL2/_real_SDL_config.h: No such file or directory
-#   fatal error: zlib.h: No such file or directory
+# Ubuntu 22.04 (verified):
+#   glibc 2.35; GCC 11.4; CMake 3.22; all required components are available
+#   through the distribution or a local prefix.
 #
-#   mkdir -p /tmp/debs "$HOME/tools/oscpu-dev-deps"
-#   cd /tmp/debs
-#   apt-get download libreadline-dev libtinfo-dev zlib1g-dev \
-#     libsqlite3-dev libsdl2-dev
-#   for f in *.deb; do dpkg-deb -x "$f" "$HOME/tools/oscpu-dev-deps"; done
+# CentOS 7.9 userland / EDA container:
+#   glibc 2.17. The default gcc/g++ 4.8.5 is not sufficient for the C++14
+#   sources and the `-std=gnu++14` flag used by difftest; use devtoolset-8/9/11
+#   or a newer GCC. The default CMake/Flex may be too old for DRAMsim3 and
+#   Verilator 4.204; provide current versions. Verilator 4.204 is not in the
+#   CentOS 7 base repositories; use a container-provided or built copy.
 #
-# This self-contained tree supplies all headers, static libraries and the
-# sdl2-config helper; no extra prefix (such as ~/tools/nemu-deps) is required.
+# EDA container:
+#   Synopsys/Cadence/Mentor tools are preinstalled under /opt/eda and licensed
+#   through /etc/profile.d/eda-env.sh. Their compiler (often gcc 4.8.5) is not
+#   the build toolchain for this repository. Use a C++14-capable environment
+#   for Verilator/difftest builds; EDA tools are used only for PPA evaluation.
+#
+# No install commands are given because package names and repositories differ.
 
 
 # =============================================================================
-# 5. Environment variables
+# 5. Fixed git dependencies (exact versions)
 # =============================================================================
-# After the dependencies are in place, set (see README.md "使用流程"):
+# The repository's libraries/ directory is empty and there is no .gitmodules.
+# Use exactly these repositories and commits:
 #
-#   cd ~/oscpu-dyw
-#   export NEMU_HOME="$PWD/libraries/NEMU"
-#   export PATH="$HOME/tools/oscpu-dev-deps/usr/bin:$PATH"
-#   export CPATH="$HOME/tools/oscpu-dev-deps/usr/include/x86_64-linux-gnu:$HOME/tools/oscpu-dev-deps/usr/include"
-#   export LIBRARY_PATH="$HOME/tools/oscpu-dev-deps/usr/lib/x86_64-linux-gnu"
+# NEMU      https://gitee.com/oscpu/NEMU.git
+#           e402575a33b6bb910a40f5114e53b1dd55b72da2
+# difftest  https://github.com/OpenXiangShan/difftest.git
+#           56d947bbfd420a0ee3f5794ad2ac4b1525892540
+# DRAMsim3  https://github.com/OpenXiangShan/DRAMsim3.git
+#           5723f6b1cc157ac2d7b4154b50fd1799c9cf54aa
+# ysyxSoC   https://github.com/OSCPU/ysyxSoC.git
+#           53540d038ed567fcf5e10d3fb3c4069922735ead
 #
-# When using system-installed -dev packages, the CPATH/LIBRARY_PATH lines can
-# be omitted. NEMU_HOME is still required at emu runtime.
-#
-# The build scripts set NOOP_HOME and DRAMSIM3_HOME themselves; do not override
-# them unless you know what you are doing.
+# NEMU's commit is available in the gitee oscpu/NEMU repository, not on the
+# GitHub upstream. Do not substitute other versions.
+# The test images under bin/ are included in this repository.
 
 
 # =============================================================================
-# 6. Python packages
+# 6. Environment variables
+# =============================================================================
+# NEMU_HOME       = <repo>/libraries/NEMU  (required at emu runtime)
+# PATH/CPATH/LIBRARY_PATH
+#                 set only when using a local development prefix (see 3).
+# NOOP_HOME and DRAMSIM3_HOME are set by build.sh.
+
+
+# =============================================================================
+# 7. Python packages
 # =============================================================================
 # None. There is no pip install step for the RTL/difftest flow.
-# Python 3 is only used indirectly by helper scripts and is part of the base OS.
+# Python 3 is used only by helper scripts in the base environment.
 
 
 # =============================================================================
-# 7. Compute / storage
+# 8. Compute and storage
 # =============================================================================
-# Tested on: 16 cores, ~15 GiB RAM, ~947 GiB free disk.
+# Tested: 16 cores, ~15 GiB RAM, ~947 GiB free disk.
 # Recommended: >= 8 cores, >= 12 GiB RAM, >= 5 GiB free disk.
-# A full emu build plus the three C++ dependencies fits comfortably in a few
-# GiB; the bulk of the disk usage comes from the toolchains and git history.
 # More cores/RAM mainly reduce the Verilator C++ compile time.
 
 
 # =============================================================================
-# 8. Quick verification
+# 9. Verification
 # =============================================================================
-# Follow README.md "使用流程". The short version:
-#
-#   cd ~/oscpu-dyw
-#   mkdir -p projects/cpu_axi_diff/build
-#   cp projects/cpu_axi_diff/vsrc/SimTop.sv projects/cpu_axi_diff/build/SimTop.v
-#   ./build.sh -e cpu_axi_diff -d -b -m "EMU_TRACE=1 WITH_DRAMSIM3=1"
-#
-#   cd projects/cpu_axi_diff/build
-#   NEMU_HOME=$HOME/oscpu-dyw/libraries/NEMU \
-#     ./emu -i ../../../bin/non-output/riscv-tests/add-riscv-tests.bin
-#
-# Expected final line:
-#   instrCnt = 450, cycleCnt = 6761, IPC = 0.066558
-#   (and "HIT GOOD TRAP" above it)
-#
-# The full 87-case regression, custom-output cycle-limit commands, and IPC
-# baselines are documented in rv_agent_cpu_plan/README.md.
+# Build, 87-case regression, custom-output cycle-limit commands, and IPC
+# baselines are documented in rv_agent_cpu_plan/README.md ("使用流程" and
+# "参考设计"). This file intentionally contains no install commands.
